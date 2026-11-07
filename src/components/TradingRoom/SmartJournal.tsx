@@ -55,7 +55,8 @@ interface SmartJournalProps {
   onSave?: (journal: any) => void;
 }
 
-const STORAGE_KEY = 'ololo_smart_trading_journal_v2';
+const STORAGE_KEY = 'aladdin_smart_trading_journal_v2';
+const LEGACY_STORAGE_KEY = 'ololo_smart_trading_journal_v2';
 
 const DEFAULT_SETUPS = [
   'Support / Resistance Retest',
@@ -159,18 +160,23 @@ const INITIAL_ENTRIES: JournalEntry[] = [
 export const SmartJournal: React.FC<SmartJournalProps> = ({ trade, trades = [], onSave }) => {
   const [entries, setEntries] = useState<JournalEntry[]>(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) return JSON.parse(saved);
+      const saved = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
     } catch (e) {
       console.error('Error loading smart journal entries:', e);
     }
-    return INITIAL_ENTRIES;
+    return [];
   });
 
   const [activeTab, setActiveTab] = useState<'ENTRIES' | 'NEW' | 'ANALYTICS'>('ENTRIES');
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   
   // Filter & Search states
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterDateRange, setFilterDateRange] = useState<'ALL' | 'TODAY' | 'WEEK' | 'MONTH'>('ALL');
   const [filterResult, setFilterResult] = useState<string>('ALL');
   const [filterEmotion, setFilterEmotion] = useState<string>('ALL');
   const [filterSetup, setFilterSetup] = useState<string>('ALL');
@@ -311,6 +317,25 @@ export const SmartJournal: React.FC<SmartJournalProps> = ({ trade, trades = [], 
     }
   };
 
+  const handleClearAllEntries = () => {
+    setEntries([]);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+      localStorage.removeItem(LEGACY_STORAGE_KEY);
+    } catch (e) {
+      console.error('Error clearing smart journal:', e);
+    }
+    resetForm();
+    setIsResetModalOpen(false);
+  };
+
+  const handleLoadSampleTrades = () => {
+    setEntries(INITIAL_ENTRIES);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_ENTRIES));
+    } catch (e) {}
+  };
+
   // Image Upload handler
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -366,9 +391,21 @@ export const SmartJournal: React.FC<SmartJournalProps> = ({ trade, trades = [], 
       const matchesEmotion = filterEmotion === 'ALL' || item.emotion === filterEmotion;
       const matchesSetup = filterSetup === 'ALL' || item.setup === filterSetup;
 
-      return matchesSearch && matchesResult && matchesEmotion && matchesSetup;
+      let matchesDate = true;
+      if (filterDateRange === 'TODAY') {
+        const todayStr = new Date().toISOString().split('T')[0];
+        matchesDate = item.date === todayStr;
+      } else if (filterDateRange === 'WEEK') {
+        const itemTime = new Date(item.date).getTime();
+        matchesDate = !isNaN(itemTime) && itemTime >= Date.now() - 7 * 86400000;
+      } else if (filterDateRange === 'MONTH') {
+        const itemTime = new Date(item.date).getTime();
+        matchesDate = !isNaN(itemTime) && itemTime >= Date.now() - 30 * 86400000;
+      }
+
+      return matchesSearch && matchesResult && matchesEmotion && matchesSetup && matchesDate;
     });
-  }, [entries, searchQuery, filterResult, filterEmotion, filterSetup]);
+  }, [entries, searchQuery, filterResult, filterEmotion, filterSetup, filterDateRange]);
 
   // Analytics Computation
   const stats = useMemo(() => {
@@ -495,19 +532,31 @@ export const SmartJournal: React.FC<SmartJournalProps> = ({ trade, trades = [], 
           </div>
         </div>
 
-        <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-2.5 shadow-lg flex flex-col justify-center gap-2">
+        <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-2.5 shadow-lg flex flex-col justify-center gap-1.5">
           <button
             onClick={() => { resetForm(); setActiveTab('NEW'); }}
-            className="w-full bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white py-1.5 px-3 rounded-lg text-xs font-bold transition-all shadow-md shadow-emerald-900/30 flex items-center justify-center gap-1.5"
+            className="w-full bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white py-1.5 px-3 rounded-lg text-xs font-bold transition-all shadow-md shadow-emerald-900/30 flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
           >
             <Plus className="w-3.5 h-3.5" /> Log Trade
           </button>
-          <button
-            onClick={exportToCSV}
-            className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 py-1 px-3 rounded-lg text-[10px] font-bold transition-colors border border-slate-700 flex items-center justify-center gap-1"
-          >
-            <FileSpreadsheet className="w-3 h-3 text-emerald-400" /> Export CSV
-          </button>
+          <div className="grid grid-cols-2 gap-1.5">
+            <button
+              onClick={exportToCSV}
+              disabled={entries.length === 0}
+              className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 py-1 px-1.5 rounded-lg text-[10px] font-bold transition-colors border border-slate-700 flex items-center justify-center gap-1 disabled:opacity-40 cursor-pointer"
+              title="Export CSV Backup"
+            >
+              <FileSpreadsheet className="w-3 h-3 text-emerald-400" /> Export CSV
+            </button>
+            <button
+              onClick={() => setIsResetModalOpen(true)}
+              disabled={entries.length === 0}
+              className="w-full bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 py-1 px-1.5 rounded-lg text-[10px] font-bold transition-colors border border-rose-500/30 flex items-center justify-center gap-1 disabled:opacity-40 cursor-pointer"
+              title="Reset and Clear All Journal Data"
+            >
+              <Trash2 className="w-3 h-3 text-rose-400" /> Reset All
+            </button>
+          </div>
         </div>
       </div>
 
@@ -516,7 +565,7 @@ export const SmartJournal: React.FC<SmartJournalProps> = ({ trade, trades = [], 
         <div className="flex items-center gap-1 sm:gap-1.5 bg-slate-950/80 p-1 rounded-xl border border-slate-800 w-full sm:w-auto overflow-x-auto custom-scrollbar">
           <button
             onClick={() => setActiveTab('ENTRIES')}
-            className={`px-2.5 py-1.5 rounded-lg text-[11px] sm:text-xs font-bold uppercase tracking-tight sm:tracking-wider transition-all flex items-center gap-1.5 shrink-0 ${
+            className={`px-2.5 py-1.5 rounded-lg text-[11px] sm:text-xs font-bold uppercase tracking-tight sm:tracking-wider transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
               activeTab === 'ENTRIES' 
                 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-sm' 
                 : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
@@ -527,7 +576,7 @@ export const SmartJournal: React.FC<SmartJournalProps> = ({ trade, trades = [], 
           </button>
           <button
             onClick={() => { if (!editingId) resetForm(); setActiveTab('NEW'); }}
-            className={`px-2.5 py-1.5 rounded-lg text-[11px] sm:text-xs font-bold uppercase tracking-tight sm:tracking-wider transition-all flex items-center gap-1.5 shrink-0 ${
+            className={`px-2.5 py-1.5 rounded-lg text-[11px] sm:text-xs font-bold uppercase tracking-tight sm:tracking-wider transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
               activeTab === 'NEW' 
                 ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 shadow-sm' 
                 : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
@@ -538,7 +587,7 @@ export const SmartJournal: React.FC<SmartJournalProps> = ({ trade, trades = [], 
           </button>
           <button
             onClick={() => setActiveTab('ANALYTICS')}
-            className={`px-2.5 py-1.5 rounded-lg text-[11px] sm:text-xs font-bold uppercase tracking-tight sm:tracking-wider transition-all flex items-center gap-1.5 shrink-0 ${
+            className={`px-2.5 py-1.5 rounded-lg text-[11px] sm:text-xs font-bold uppercase tracking-tight sm:tracking-wider transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
               activeTab === 'ANALYTICS' 
                 ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30 shadow-sm' 
                 : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
@@ -574,9 +623,20 @@ export const SmartJournal: React.FC<SmartJournalProps> = ({ trade, trades = [], 
 
             <div className="flex flex-wrap items-center gap-2">
               <select
+                value={filterDateRange}
+                onChange={(e) => setFilterDateRange(e.target.value as any)}
+                className="bg-slate-950 border border-slate-700/60 rounded-lg px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-emerald-500/50 cursor-pointer"
+              >
+                <option value="ALL">All Time</option>
+                <option value="TODAY">📅 Today</option>
+                <option value="WEEK">🗓️ This Week</option>
+                <option value="MONTH">📆 This Month</option>
+              </select>
+
+              <select
                 value={filterResult}
                 onChange={(e) => setFilterResult(e.target.value)}
-                className="bg-slate-950 border border-slate-700/60 rounded-lg px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-emerald-500/50"
+                className="bg-slate-950 border border-slate-700/60 rounded-lg px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-emerald-500/50 cursor-pointer"
               >
                 <option value="ALL">All Results (W/L)</option>
                 <option value="WIN">Wins Only</option>
@@ -587,7 +647,7 @@ export const SmartJournal: React.FC<SmartJournalProps> = ({ trade, trades = [], 
               <select
                 value={filterEmotion}
                 onChange={(e) => setFilterEmotion(e.target.value)}
-                className="bg-slate-950 border border-slate-700/60 rounded-lg px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-emerald-500/50"
+                className="bg-slate-950 border border-slate-700/60 rounded-lg px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-emerald-500/50 cursor-pointer"
               >
                 <option value="ALL">All Emotions</option>
                 <option value="Disciplined">🧠 Disciplined</option>
@@ -601,7 +661,7 @@ export const SmartJournal: React.FC<SmartJournalProps> = ({ trade, trades = [], 
               <select
                 value={filterSetup}
                 onChange={(e) => setFilterSetup(e.target.value)}
-                className="bg-slate-950 border border-slate-700/60 rounded-lg px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-emerald-500/50 max-w-[180px]"
+                className="bg-slate-950 border border-slate-700/60 rounded-lg px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-emerald-500/50 max-w-[180px] cursor-pointer"
               >
                 <option value="ALL">All Setups</option>
                 {DEFAULT_SETUPS.map(s => (
@@ -609,18 +669,30 @@ export const SmartJournal: React.FC<SmartJournalProps> = ({ trade, trades = [], 
                 ))}
               </select>
 
-              {(searchQuery || filterResult !== 'ALL' || filterEmotion !== 'ALL' || filterSetup !== 'ALL') && (
+              {(searchQuery || filterDateRange !== 'ALL' || filterResult !== 'ALL' || filterEmotion !== 'ALL' || filterSetup !== 'ALL') && (
                 <button
                   onClick={() => {
                     setSearchQuery('');
+                    setFilterDateRange('ALL');
                     setFilterResult('ALL');
                     setFilterEmotion('ALL');
                     setFilterSetup('ALL');
                   }}
-                  className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-lg transition-colors"
+                  className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
                   title="Reset Filters"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
+                </button>
+              )}
+
+              {entries.length > 0 && (
+                <button
+                  onClick={() => setIsResetModalOpen(true)}
+                  className="px-2.5 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 border border-rose-500/30 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
+                  title="Clear All Journal Entries"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Clear Journal</span>
                 </button>
               )}
             </div>
@@ -628,18 +700,33 @@ export const SmartJournal: React.FC<SmartJournalProps> = ({ trade, trades = [], 
 
           {/* ENTRIES GRID / LIST */}
           {filteredEntries.length === 0 ? (
-            <div className="bg-slate-900/40 border border-dashed border-slate-800 rounded-2xl p-12 text-center flex flex-col items-center justify-center space-y-3">
+            <div className="bg-slate-900/40 border border-dashed border-slate-800 rounded-2xl p-10 text-center flex flex-col items-center justify-center space-y-3">
               <BookOpen className="w-12 h-12 text-slate-600" />
-              <div className="text-base font-bold text-slate-300">No Journal Entries Found</div>
-              <p className="text-xs text-slate-500 max-w-sm">
-                No trades match your search criteria. Log your first trade reflection or clear your filters to see entries.
+              <div className="text-base font-bold text-slate-200">
+                {entries.length === 0 ? 'Your Trading Journal is Clean & Ready' : 'No Matching Journal Entries Found'}
+              </div>
+              <p className="text-xs text-slate-400 max-w-md">
+                {entries.length === 0 
+                  ? 'No trades logged yet. Start recording your real trade setups, emotions, and lessons to build compounding discipline.' 
+                  : 'No trades match your active search or filter selection. Try adjusting or resetting your filters.'}
               </p>
-              <button
-                onClick={() => { resetForm(); setActiveTab('NEW'); }}
-                className="mt-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs py-2 px-4 rounded-xl transition-all shadow-lg shadow-emerald-900/20"
-              >
-                + Log New Trade Now
-              </button>
+              <div className="flex items-center gap-3 mt-2 flex-wrap justify-center">
+                <button
+                  onClick={() => { resetForm(); setActiveTab('NEW'); }}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs py-2 px-4 rounded-xl transition-all shadow-lg shadow-emerald-900/20 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Log First Trade Now
+                </button>
+                {entries.length === 0 && (
+                  <button
+                    onClick={handleLoadSampleTrades}
+                    className="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-bold text-xs py-2 px-3.5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+                    title="Load sample data to test analytics and features"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400" /> Load Sample Trades
+                  </button>
+                )}
+              </div>
             </div>
           ) : (
             <div className="space-y-3">
@@ -1256,6 +1343,58 @@ export const SmartJournal: React.FC<SmartJournalProps> = ({ trade, trades = [], 
             >
               <X className="w-5 h-5" />
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* SAFE RESET CONFIRMATION MODAL */}
+      {isResetModalOpen && (
+        <div 
+          onClick={() => setIsResetModalOpen(false)}
+          className="fixed inset-0 z-[250] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in"
+        >
+          <div 
+            onClick={e => e.stopPropagation()}
+            className="bg-slate-900 border border-rose-500/40 rounded-2xl p-6 max-w-md w-full shadow-[0_0_50px_rgba(244,63,94,0.25)] space-y-4 relative"
+          >
+            <div className="w-12 h-12 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center mx-auto text-rose-400">
+              <AlertTriangle className="w-6 h-6 animate-pulse" />
+            </div>
+
+            <div className="text-center space-y-1.5">
+              <h3 className="text-base font-black text-white">Reset Trading Journal?</h3>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                This will permanently clear all <strong className="text-white font-mono">{entries.length}</strong> recorded trades, setup win rates, and reflections. This action cannot be reversed.
+              </p>
+            </div>
+
+            <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
+              <span>Save your trading history first:</span>
+              <button
+                type="button"
+                onClick={exportToCSV}
+                className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 hover:underline cursor-pointer"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" /> Download CSV Backup
+              </button>
+            </div>
+
+            <div className="flex gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsResetModalOpen(false)}
+                className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-colors border border-slate-700 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleClearAllEntries}
+                className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-all shadow-lg shadow-rose-900/40 flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Yes, Clear All Trades
+              </button>
+            </div>
           </div>
         </div>
       )}

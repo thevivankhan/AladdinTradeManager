@@ -59,9 +59,11 @@ import {
   Maximize2,
   Minimize2,
   ExternalLink,
+  GraduationCap,
   Move,
   Smartphone,
   SplitSquareVertical,
+  MessageCircle,
 } from "lucide-react";
 import { ChartScannerAI } from "./components/TradingRoom/ChartScannerAI";
 import { AnalyticsDashboard } from "./components/TradingRoom/AnalyticsDashboard";
@@ -78,13 +80,10 @@ import { OlOlODailyCalculator } from "./components/TradingRoom/OlOlODailyCalcula
 import html2canvas from "html2canvas";
 import { QRCodeSVG } from "qrcode.react";
 import { motion, AnimatePresence } from "motion/react";
-import { auth, db } from "./lib/firebase";
-import { onAuthStateChanged, signOut, User } from "firebase/auth";
-import { doc, getDoc, onSnapshot } from "firebase/firestore";
 import { openTelegramSupport } from "./lib/telegram";
 
 import LandingPage from "./components/LandingPage";
-import { getIssuedLicenses, showTawkWidget, hideTawkWidget } from "./lib/licenseEngine";
+import { getIssuedLicenses } from "./lib/licenseEngine";
 
 function lazyWithRetry<T extends React.ComponentType<any>>(
   factory: () => Promise<{ default: T }>
@@ -165,11 +164,47 @@ interface PastSession {
 const evaluateMath = (expr: string): number => {
   if (!expr) return 0;
   try {
-    // Only allow numbers and basic math operators
-    if (!/^[0-9+\-*/.() ]+$/.test(expr)) return parseFloat(expr) || 0;
-    // eslint-disable-next-line no-new-func
-    const result = new Function("return " + expr)();
-    return isNaN(result) ? 0 : Number(result);
+    const clean = expr.replace(/\s+/g, "");
+    if (!/^[0-9+\-*/.()]+$/.test(clean)) {
+      return parseFloat(clean) || 0;
+    }
+    const tokens = clean.match(/(\d+(\.\d+)?|[+\-*/()])/g);
+    if (!tokens) return parseFloat(clean) || 0;
+
+    let pos = 0;
+    const parsePrimary = (): number => {
+      const tok = tokens[pos++];
+      if (tok === '(') {
+        const val = parseExpr();
+        if (tokens[pos] === ')') pos++;
+        return val;
+      }
+      if (tok === '-' || tok === '+') {
+        const next = parsePrimary();
+        return tok === '-' ? -next : next;
+      }
+      return parseFloat(tok) || 0;
+    };
+    const parseFactor = (): number => {
+      let val = parsePrimary();
+      while (pos < tokens.length && (tokens[pos] === '*' || tokens[pos] === '/')) {
+        const op = tokens[pos++];
+        const right = parsePrimary();
+        val = op === '*' ? val * right : (right !== 0 ? val / right : 0);
+      }
+      return val;
+    };
+    const parseExpr = (): number => {
+      let val = parseFactor();
+      while (pos < tokens.length && (tokens[pos] === '+' || tokens[pos] === '-')) {
+        const op = tokens[pos++];
+        const right = parseFactor();
+        val = op === '+' ? val + right : val - right;
+      }
+      return val;
+    };
+    const res = parseExpr();
+    return isNaN(res) ? 0 : Number(res);
   } catch {
     return parseFloat(expr) || 0;
   }
@@ -355,17 +390,7 @@ export default function App() {
     } catch {}
   };
 
-  // Synchronize Tawk.to live chat visibility:
-  // ONLY show outside (Landing Page, Login, Paywall, Admin Panel).
-  // COMPLETELY HIDE inside the actual Trade Manager app / software workspace.
-  useEffect(() => {
-    const isInsideTradeManager = !showLandingPage && dbUser && dbUser.role !== "admin" && dbUser.status === "active";
-    if (isInsideTradeManager) {
-      hideTawkWidget();
-    } else {
-      showTawkWidget();
-    }
-  }, [showLandingPage, dbUser, adminViewMode]);
+
 
   const isAdmin = dbUser?.role === "admin";
   const userId = firebaseUser?.uid;
@@ -387,11 +412,57 @@ export default function App() {
     try {
       const savedDbUser = localStorage.getItem("mock_dbUser");
       const savedUser = localStorage.getItem("mock_firebaseUser");
+      const token = localStorage.getItem("atm_auth_token");
+      const clientDeviceId = localStorage.getItem("atm_client_device_id") || "";
+
       if (savedDbUser) {
         const parsed = JSON.parse(savedDbUser);
+        // Instant revocation if user unlocked with old demo keys
+        if (
+          parsed.uid === 'lic-C3XU78M' ||
+          parsed.activeCryptoKey?.includes('C3XU78M') ||
+          parsed.uid === 'lic-9B2X74M' ||
+          parsed.activeCryptoKey?.includes('9B2X74M')
+        ) {
+          localStorage.removeItem('mock_dbUser');
+          localStorage.removeItem('mock_firebaseUser');
+          localStorage.removeItem('atm_auth_token');
+          localStorage.removeItem('atm_active_license_session');
+          setDbUser(null);
+          setFirebaseUser(null);
+          setShowLandingPage(true);
+          setIsAuthReady(true);
+          return;
+        }
+
         setDbUser(parsed);
         setFirebaseUser(savedUser ? JSON.parse(savedUser) : { uid: parsed.uid, email: parsed.email });
         setShowLandingPage(false);
+
+        // Server-Authoritative Cryptographic Token Handshake (Immune to DevTools tampering)
+        if (token) {
+          fetch("/api/auth/verify-session", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ token, deviceId: clientDeviceId }),
+          })
+            .then((r) => r.json())
+            .then((res) => {
+              if (res && res.valid && res.user) {
+                setDbUser(res.user);
+                setFirebaseUser({ uid: res.user.uid, email: res.user.email });
+                try {
+                  localStorage.setItem("mock_dbUser", JSON.stringify(res.user));
+                } catch {}
+              } else if (res && res.valid === false) {
+                // Tampered or revoked session
+                handleLogout();
+              }
+            })
+            .catch(() => {
+              // Network offline: maintain offline resilient session
+            });
+        }
       } else {
         if (isInitialLoadRef.current) {
           setShowLandingPage(true);
@@ -404,24 +475,7 @@ export default function App() {
     isInitialLoadRef.current = false;
   }, []);
 
-  // Tawk.to 100% Free Live Chat Loader
-  useEffect(() => {
-    try {
-      const propId = localStorage.getItem('atm_tawk_property_id');
-      const widgetId = localStorage.getItem('atm_tawk_widget_id') || 'default';
-      if (!propId || (window as any).__tawk_initialized) return;
 
-      const s1 = document.createElement("script");
-      s1.async = true;
-      s1.src = `https://embed.tawk.to/${propId}/${widgetId}`;
-      s1.charset = "UTF-8";
-      s1.setAttribute("crossorigin", "*");
-      document.head.appendChild(s1);
-      (window as any).__tawk_initialized = true;
-    } catch (e) {
-      console.warn("Tawk.to initialization notice:", e);
-    }
-  }, []);
 
   // Live remote sync for Crypto VIP licenses (enforces admin kill-switch and instant renewal)
   useEffect(() => {
@@ -2800,7 +2854,17 @@ export default function App() {
         ) : dbUser.status === "suspended" ? (
           <SuspendedScreen onLogout={handleLogout} />
         ) : dbUser.status === "pending" ? (
-          <PendingApprovalScreen />
+          <PendingApprovalScreen 
+            user={dbUser}
+            onLogout={handleLogout}
+            onActivated={(activatedUser: any) => {
+              setDbUser(activatedUser);
+              try {
+                localStorage.setItem("mock_dbUser", JSON.stringify(activatedUser));
+                localStorage.setItem("aladdin_in_app", "true");
+              } catch {}
+            }}
+          />
         ) : !dbUser.isLifetimePaid && (!dbUser.subscriptionEndDate || new Date(dbUser.subscriptionEndDate) < new Date()) ? (
           dbUser.hasPendingPayment ? (
             <PendingScreen />
@@ -6030,13 +6094,13 @@ export default function App() {
 
                           <div className="mt-4 flex flex-col items-center gap-2.5">
                             <a
-                              href="https://telegram.dog/SaifyKhanAcademy"
+                              href="https://www.cocabellie.com"
                               target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-2 text-xs font-bold text-white bg-[#0088cc]/10 hover:bg-[#0088cc]/20 border border-[#0088cc]/30 px-4 py-2 rounded-xl transition-all hover:shadow-[0_0_15px_rgba(0,136,204,0.3)] hover:-translate-y-0.5"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-2 text-xs font-black tracking-wider uppercase text-white bg-gradient-to-r from-red-600 via-rose-600 to-red-700 hover:from-red-500 hover:to-rose-500 border border-rose-400/40 px-6 py-2.5 rounded-xl transition-all shadow-[0_0_20px_rgba(225,29,72,0.45)] hover:shadow-[0_0_28px_rgba(225,29,72,0.7)] hover:-translate-y-0.5 cursor-pointer active:scale-95"
                             >
-                              <Send className="w-3.5 h-3.5 text-[#0088cc]" />
-                              Join Telegram
+                              <GraduationCap className="w-4 h-4 text-white" />
+                              ACADEMY
                             </a>
                           </div>
                         </div>
@@ -6075,13 +6139,9 @@ export default function App() {
                   className="relative z-10 flex flex-col items-center gap-1.5 w-full overflow-x-auto"
                   style={{ scrollbarWidth: "none" }}
                 >
-                  <div className="border border-[#00d084]/80 bg-[#00d084]/10 text-[#00d084] px-3 py-0.5 rounded-md font-sans text-sm md:text-base font-black tracking-[0.2em] shadow-[0_0_10px_rgba(0,208,132,0.15)] whitespace-nowrap">
-                    - OlOlO -
+                  <div className="border border-[#00d084]/80 bg-[#00d084]/10 text-[#00d084] px-3.5 py-0.5 rounded-md font-sans text-xs sm:text-sm md:text-base font-black tracking-[0.15em] sm:tracking-[0.2em] shadow-[0_0_10px_rgba(0,208,132,0.15)] whitespace-nowrap uppercase">
+                    - ALADDIN AI ORGANIZATION -
                   </div>
-
-                  <h2 className="text-slate-200 text-[9px] sm:text-[10px] md:text-xs font-medium tracking-widest whitespace-nowrap">
-                    Open - Life - Oriented - Leadership - Organization
-                  </h2>
 
                   <p className="text-slate-400 text-[8px] md:text-[10px] whitespace-nowrap">
                     All Rights Reserved © Aladdin AI Organization  - <a href="https://www.Aladdin.Org.In" target="_blank" rel="noreferrer" className="text-emerald-400 hover:underline font-semibold">www.Aladdin.Org.In</a>

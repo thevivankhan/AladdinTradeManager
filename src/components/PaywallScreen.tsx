@@ -49,10 +49,48 @@ export const PaywallScreen: React.FC<PaywallScreenProps> = ({ onPaymentSubmitted
         <div className="w-16 h-16 bg-emerald-500/10 rounded-2xl flex items-center justify-center mx-auto mb-5 border border-emerald-500/30">
           <CreditCard className="w-8 h-8 text-emerald-400" />
         </div>
-        <h2 className="text-2xl font-black text-white mb-2">Activate Subscription</h2>
-        <p className="text-slate-400 text-xs sm:text-sm mb-6">
-          Upgrade to ALADDIN TRADE MANAGER to access elite automated risk tools, compounding plans, and bias analysis.
+        <h2 className="text-2xl font-black text-white mb-1">Activate VIP Subscription</h2>
+        <p className="text-slate-400 text-xs mb-4">
+          Upgrade to ALADDIN TRADE MANAGER for institutional risk tools & AI automation.
         </p>
+
+        {/* V4.0 Institutional Allocation Special Card (Compact & Premium) */}
+        <div className="mb-4 p-2.5 rounded-xl bg-gradient-to-b from-[#131b2e] via-[#0b1222] to-[#060a14] border border-amber-400/40 text-left relative overflow-hidden shadow-[0_0_15px_rgba(245,158,11,0.15)]">
+          <div className="absolute top-0 inset-x-0 h-[1.5px] bg-gradient-to-r from-transparent via-amber-400 to-transparent opacity-80" />
+          
+          <div className="flex items-center justify-between gap-1.5 mb-1.5">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-xs font-bold text-white tracking-wide shrink-0">👑 Lifetime VIP</span>
+              <span className="text-[8px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-400/10 border border-amber-400/30 text-amber-300 uppercase tracking-wider">
+                V4.0 Allocation
+              </span>
+              <span className="text-[8px] font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1 py-0.5 rounded">
+                Save $150
+              </span>
+            </div>
+            <div className="flex items-baseline gap-1 font-mono shrink-0">
+              <span className="text-[10px] text-slate-400 line-through font-normal">$397</span>
+              <strong className="text-amber-300 font-black text-sm">$247</strong>
+            </div>
+          </div>
+
+          <div className="mb-2">
+            <div className="flex justify-between items-center text-[9px] font-mono text-slate-400 mb-1">
+              <span>Never Pay Again · <strong className="text-slate-200">84/100 Seats</strong></span>
+              <span className="text-amber-400 font-semibold">Only 16 Left</span>
+            </div>
+            <div className="w-full h-1 bg-slate-950 rounded-full overflow-hidden border border-amber-500/20">
+              <div className="h-full bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-300 rounded-full w-[84%]"></div>
+            </div>
+          </div>
+
+          <div className="pt-1.5 border-t border-slate-800/80 text-[10px] text-slate-400 flex justify-between font-mono">
+            <span>1 Mo: <strong className="text-slate-200">$47</strong></span>
+            <span>3 Mo: <strong className="text-slate-200">$97</strong></span>
+            <span>6 Mo: <strong className="text-slate-200">$147</strong></span>
+            <span>1 Yr: <strong className="text-slate-200">$197</strong></span>
+          </div>
+        </div>
 
         <form onSubmit={handleSubmit} className="space-y-4 text-left">
           <div>

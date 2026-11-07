@@ -1,8 +1,5 @@
-/**
- * Aladdin Trade Manager™ - Proprietary Crypto License Vault Engine
- * Circular 1,000-Key rotating cryptographic security system.
- * Zero external dependencies. 100% resilient across all domains and devices.
- */
+import { openTelegramSupport } from './telegram';
+
 
 export interface LicenseKey {
   id: string;
@@ -10,7 +7,7 @@ export interface LicenseKey {
   cleanKey: string;      // Stripped uppercase: "7F9K82D" (7 characters)
   traderName: string;
   traderPhone?: string;
-  plan: '1 Month ($47)' | '3 Months ($97)' | '6 Months ($147)' | '1 Year ($197)' | 'Lifetime VIP ($297)';
+  plan: '1 Month ($47)' | '3 Months ($97)' | '6 Months ($147)' | '1 Year ($197)' | 'Lifetime VIP ($247)' | 'Lifetime VIP ($297)';
   issuedAt: number;
   expiresAt: number | null; // null = Lifetime VIP
   status: 'active' | 'suspended' | 'expired';
@@ -56,12 +53,11 @@ const STORAGE_KEY_LICENSES = 'atm_vault_licenses_v1';
 const STORAGE_KEY_POINTER = 'atm_vault_pointer_v1';
 const STORAGE_KEY_ACTIVE_SESSION = 'atm_active_license_session';
 const STORAGE_KEY_APPLICATIONS = 'atm_student_applications_v1';
-const STORAGE_KEY_TAWK_PROPERTY = 'atm_tawk_property_id';
-const STORAGE_KEY_TAWK_WIDGET = 'atm_tawk_widget_id';
+
 
 /**
  * Deterministically generates the 1,000 circular crypto-encrypted keys pool
- * in the ATM-XXXXXXX format (e.g. ATM-C3XU78M) using high-entropy algorithm.
+ * in the ATM-XXXXXXX format using high-entropy algorithm.
  */
 const generate1000CircularPool = (): string[] => {
   const pool: string[] = [];
@@ -101,37 +97,18 @@ export const getIssuedLicenses = (): LicenseKey[] => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_LICENSES);
     if (!raw) {
-      // Seed initial demo licenses with ATM- key format
-      const initial: LicenseKey[] = [
-        {
-          id: 'lic-demo-1',
-          key: 'ATM-C3XU78M',
-          cleanKey: 'C3XU78M',
-          traderName: 'Saify Khan (VIP)',
-          traderPhone: '+91 98765 43210',
-          plan: 'Lifetime VIP ($297)',
-          issuedAt: Date.now() - 5 * 24 * 60 * 60 * 1000,
-          expiresAt: null,
-          status: 'active',
-          notes: 'Master VIP Member',
-        },
-        {
-          id: 'lic-demo-2',
-          key: 'ATM-9B2X74M',
-          cleanKey: '9B2X74M',
-          traderName: 'Rahul Trader',
-          traderPhone: '+91 91234 56789',
-          plan: '1 Month ($47)',
-          issuedAt: Date.now() - 2 * 24 * 60 * 60 * 1000,
-          expiresAt: Date.now() + 28 * 24 * 60 * 60 * 1000,
-          status: 'active',
-          notes: 'Monthly Growth Pass',
-        },
-      ];
-      saveIssuedLicenses(initial);
-      return initial;
+      return [];
     }
-    return JSON.parse(raw);
+    const parsed: LicenseKey[] = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    // Purge any legacy demo keys
+    const sanitized = parsed.filter(
+      (l) => l.cleanKey !== 'C3XU78M' && l.cleanKey !== '9B2X74M' && !l.id?.startsWith('lic-demo-')
+    );
+    if (sanitized.length !== parsed.length) {
+      saveIssuedLicenses(sanitized);
+    }
+    return sanitized;
   } catch {
     return [];
   }
@@ -148,9 +125,9 @@ export const saveIssuedLicenses = (licenses: LicenseKey[]) => {
 export const getNextPointerIndex = (): number => {
   try {
     const p = localStorage.getItem(STORAGE_KEY_POINTER);
-    return p ? parseInt(p, 10) : 2; // start after initial 2 demo keys
+    return p ? parseInt(p, 10) : 0;
   } catch {
-    return 2;
+    return 0;
   }
 };
 
@@ -208,104 +185,13 @@ export const getDeviceHumanName = (): string => {
 };
 
 /**
- * Tawk.to live chat configuration helpers
- */
-export const getTawkToPropertyId = (): string => {
-  try {
-    return localStorage.getItem(STORAGE_KEY_TAWK_PROPERTY) || '6aedf91657710a4002b40288';
-  } catch {
-    return '6aedf91657710a4002b40288';
-  }
-};
-
-export const setTawkToPropertyId = (id: string) => {
-  try {
-    localStorage.setItem(STORAGE_KEY_TAWK_PROPERTY, id.trim());
-  } catch {}
-};
-
-export const getTawkToWidgetId = (): string => {
-  try {
-    return localStorage.getItem(STORAGE_KEY_TAWK_WIDGET) || 'default';
-  } catch {
-    return 'default';
-  }
-};
-
-export const setTawkToWidgetId = (id: string) => {
-  try {
-    localStorage.setItem(STORAGE_KEY_TAWK_WIDGET, id.trim() || 'default');
-  } catch {}
-};
-
-/**
- * Programmatically shows the Tawk.to floating bubble (on outside pages: Landing, Login, Paywall, Admin)
- */
-export const showTawkWidget = () => {
-  if (typeof window !== 'undefined' && (window as any).Tawk_API) {
-    try {
-      (window as any).Tawk_API.showWidget?.();
-    } catch {}
-  }
-};
-
-/**
- * Programmatically hides the Tawk.to floating bubble (inside Trade Manager app / software)
- */
-export const hideTawkWidget = () => {
-  if (typeof window !== 'undefined' && (window as any).Tawk_API) {
-    try {
-      (window as any).Tawk_API.hideWidget?.();
-      (window as any).Tawk_API.minimize?.();
-    } catch {}
-  }
-};
-
-/**
- * Sets student visitor profile in Tawk.to before chat opens
- * so the admin sees the student's name, phone, email, and hardware in the Tawk.to mobile app
- */
-export const setTawkVisitorInfo = (name: string, contact: string, query?: string) => {
-  if (typeof window !== 'undefined' && (window as any).Tawk_API) {
-    const tawk = (window as any).Tawk_API;
-    const isEmail = contact.includes('@');
-    const attributes: Record<string, string> = {
-      name: name.trim(),
-      [isEmail ? 'email' : 'phone']: contact.trim(),
-      hardware: getDeviceHumanName(),
-    };
-    if (query) attributes.inquiry = query.trim();
-    if (typeof tawk.setAttributes === 'function') {
-      try {
-        tawk.setAttributes(attributes, () => {});
-      } catch {}
-    }
-  }
-};
-
-/**
- * Triggers the Tawk.to live chat window to open/maximize directly
- * or opens the web chat URL as instant fallback.
+ * Direct Live Support Router (Aladdin AI Telegram Support)
  */
 export const openTawkToChat = (studentName?: string, studentContact?: string, query?: string) => {
-  if (typeof window !== 'undefined') {
-    const tawk = (window as any).Tawk_API;
-    if (studentName && studentContact) {
-      setTawkVisitorInfo(studentName, studentContact, query);
-    }
-    if (tawk && typeof tawk.maximize === 'function') {
-      try {
-        tawk.showWidget?.();
-        tawk.maximize();
-        return;
-      } catch (e) {
-        console.warn('Tawk maximize error', e);
-      }
-    }
-    const propId = getTawkToPropertyId() || '6aedf91657710a4002b40288';
-    const widgetId = getTawkToWidgetId() || 'default';
-    window.open(`https://tawk.to/chat/${propId}/${widgetId}`, '_blank');
-  }
+  const msg = studentName 
+    ? `Hello Master Admin, I am ${studentName} (${studentContact || 'Trader'}). ${query || 'I need support with Aladdin Trade Manager.'}`
+    : query || 'Hello Master Admin, I need live support.';
+  openTelegramSupport(msg);
 };
 
 /**
@@ -421,45 +307,17 @@ export const approveStudentApplication = (
   return { app: apps[idx], license: newLic };
 };
 
-export const rejectStudentApplication = async (appId: string): Promise<boolean> => {
+export const rejectStudentApplication = (appId: string): boolean => {
   const apps = getStudentApplications();
   const idx = apps.findIndex((a) => a.id === appId);
-  if (idx !== -1) {
-    apps[idx] = { ...apps[idx], status: 'rejected' };
-    saveStudentApplications(apps);
-  }
-  try {
-    const res = await fetch('/api/student-applications/reject', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ appId }),
-    });
-    const data = await res.json();
-    if (data && Array.isArray(data.applications)) {
-      saveStudentApplications(data.applications);
-    }
-  } catch {}
+  if (idx === -1) return false;
+
+  apps[idx] = { ...apps[idx], status: 'rejected' };
+  saveStudentApplications(apps);
   return true;
 };
 
-export const deleteStudentApplication = async (appId: string): Promise<boolean> => {
-  const apps = getStudentApplications();
-  const filtered = apps.filter((a) => a.id !== appId);
-  saveStudentApplications(filtered);
-  try {
-    const res = await fetch('/api/student-applications/delete', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ appId }),
-    });
-    const data = await res.json();
-    if (data && Array.isArray(data.applications)) {
-      saveStudentApplications(data.applications);
-    }
-  } catch {}
-  return true;
-};
-
+/**
 /**
  * Formats a 7-character raw key into clean 7 characters without any dash
  */
@@ -557,8 +415,8 @@ export const issueNewLicense = (
 /**
  * Validates an access code entered by the user.
  * Supports:
- * - "ATM-C3XU78M" (Full Cryptographic Key)
- * - "C3XU78M" (7-Character Code)
+ * - "ATM-XXXXXXX" (Full Cryptographic Key)
+ * - 7-Character Clean Code
  * - Master Admin whitelist emails
  */
 export const validateLicenseCode = (input: string): ValidationResult => {
@@ -577,6 +435,16 @@ export const validateLicenseCode = (input: string): ValidationResult => {
   // 2. Extract clean 7-character crypto key
   const stripped = trimmed.toUpperCase().replace(/^ATM[-_\s]?/, '').replace(/[^A-Z0-9]/g, '');
   const normalizedFull = stripped.length === 7 ? `ATM-${stripped}` : trimmed.toUpperCase();
+
+  // Explicitly block example/demo keys
+  const BLACKLISTED_DEMO_KEYS = ['C3XU78M', '9B2X74M', 'XXXXXXX', '1234567', '0000000', 'TESTKEY'];
+  if (BLACKLISTED_DEMO_KEYS.includes(stripped) || (stripped.startsWith('C3X') && stripped === 'C3XU78M')) {
+    return {
+      valid: false,
+      role: 'user',
+      reason: '❌ Invalid Key: Example codes cannot be used. Please contact Master Admin to receive your official 7-digit access key.',
+    };
+  }
 
   // 3. Check Issued Licenses
   const licenses = getIssuedLicenses();
@@ -641,73 +509,6 @@ export const validateLicenseCode = (input: string): ValidationResult => {
     role: 'user',
     license: found,
   };
-};
-
-/**
- * Loads all issued licenses from central server and caches in localStorage
- */
-export const syncLicensesFromServer = async (): Promise<LicenseKey[]> => {
-  try {
-    const res = await fetch('/api/licenses');
-    const data = await res.json();
-    if (data && Array.isArray(data.licenses) && data.licenses.length > 0) {
-      saveIssuedLicenses(data.licenses);
-      return data.licenses;
-    }
-  } catch {}
-  return getIssuedLicenses();
-};
-
-/**
- * Validates a license code in real-time against central server database
- * with fallback to local storage cache. Guarantees keys work across any device!
- */
-export const validateLicenseCodeAsync = async (input: string): Promise<ValidationResult> => {
-  const trimmed = input.trim();
-  const lower = trimmed.toLowerCase();
-
-  // 1. Instant Master Admin Check
-  if (MASTER_ADMIN_EMAILS.map(e => e.toLowerCase()).includes(lower)) {
-    return {
-      valid: true,
-      role: 'admin',
-      reason: 'Master Admin Access Verified',
-    };
-  }
-
-  // 2. Query Central Server Validator
-  try {
-    const deviceId = getClientDeviceId();
-    const deviceName = getDeviceHumanName();
-    const res = await fetch('/api/validate-license', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key: trimmed, deviceId, deviceName }),
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-      if (data && typeof data.valid === 'boolean') {
-        if (data.valid && data.license) {
-          // Merge to local storage
-          const existing = getIssuedLicenses();
-          const idx = existing.findIndex((l: LicenseKey) => l.id === data.license.id || l.cleanKey === data.license.cleanKey);
-          if (idx !== -1) {
-            existing[idx] = data.license;
-          } else {
-            existing.unshift(data.license);
-          }
-          saveIssuedLicenses(existing);
-        }
-        return data;
-      }
-    }
-  } catch (err) {
-    console.warn('Server validation offline, falling back to local cache', err);
-  }
-
-  // 3. Fallback to local synchronous validation
-  return validateLicenseCode(input);
 };
 
 /**

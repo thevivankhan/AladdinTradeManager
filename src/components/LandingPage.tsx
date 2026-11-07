@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { SupportModal } from './SupportModal';
-import { validateLicenseCode, validateLicenseCodeAsync, saveActiveSession, MASTER_ADMIN_EMAILS } from '../lib/licenseEngine';
+import { validateLicenseCode, saveActiveSession, MASTER_ADMIN_EMAILS } from '../lib/licenseEngine';
 import {
   Key,
   User,
@@ -573,7 +573,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
   const [isVerifyingId, setIsVerifyingId] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [pricingMode, setPricingMode] = useState<'pocket' | 'direct'>('pocket');
-  const [selectedDirectPlan, setSelectedDirectPlan] = useState<string>('Lifetime VIP ($297)');
+  const [selectedDirectPlan, setSelectedDirectPlan] = useState<string>('Lifetime VIP ($247)');
   const [selectedPocketTier, setSelectedPocketTier] = useState<string>('Pocket Option $100 Deposit (3 Mos)');
 
   const digitInputRefs = useRef<(HTMLInputElement | null)[]>([]);
@@ -752,7 +752,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
     const newDigits = [...codeDigits];
 
     if (clean.length > 1) {
-      // User pasted multiple characters (e.g. "ATM-C3XU78M" or "C3XU78M")
+      // User pasted multiple characters (e.g. "ATM-XXXXXXX" or "XXXXXXX")
       const pasted = clean.slice(0, 7).split('');
       pasted.forEach((char, i) => {
         if (i < 7) newDigits[i] = char;
@@ -815,11 +815,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
     }
   };
 
-  const handleAccessWithCode = async () => {
+  const handleAccessWithCode = () => {
     const raw = codeDigits.join('').toUpperCase();
     if (raw.length === 7) {
       const fullCode = `ATM-${raw}`;
-      const res = await validateLicenseCodeAsync(fullCode);
+      const res = validateLicenseCode(fullCode);
       if (res.valid) {
         if (res.role === 'admin') {
           handleAdminEmailLogin('thevivankhan@gmail.com');
@@ -868,33 +868,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
       return;
     }
 
-    // If already in verified view, proceed to login directly as Pocket Option trader!
+    // If already in verified view: guide them to enter their 7-Digit Access Code in the Code tab
     if (isVerifiedView) {
-      const pocketUser = {
-        uid: 'po-' + (rawVal.replace(/\D/g, '') || rawVal),
-        role: 'user',
-        status: 'active',
-        name: 'Trader #' + rawVal,
-        pocketOptionId: rawVal,
-        isLifetimePaid: true,
-        plan: pricingMode === 'direct' ? selectedDirectPlan : selectedPocketTier,
-        createdAt: new Date().toISOString(),
-      };
-      try {
-        localStorage.setItem('mock_dbUser', JSON.stringify(pocketUser));
-        localStorage.setItem('mock_firebaseUser', JSON.stringify({ uid: pocketUser.uid, email: '' }));
-        localStorage.setItem('aladdin_in_app', 'true');
-      } catch {}
-
-      if (onDirectLogin) {
-        onDirectLogin(pocketUser);
-      } else {
-        onLogin();
-      }
+      setActiveTab('code');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      setErrorMessage('Trader ID verified! Please enter your 7-Digit Access Code below to open Trade Manager.');
       return;
     }
 
-    // Real-time verification of entered Trader ID
+    // Real-time verification of entered Trader ID against central server affiliate records
     setIsVerifyingId(true);
     setErrorMessage(null);
 
@@ -909,15 +891,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
         setIsVerifiedView(false);
       }
     } catch {
-      // Fallback verification check against authorized list
-      const demoVerified = ['77554333', '143702223', '8849102', '9923184', '5521948'];
-      if (demoVerified.includes(rawVal)) {
-        setIsVerifiedView(true);
-        setIsNotFoundView(false);
-      } else {
-        setIsNotFoundView(true);
-        setIsVerifiedView(false);
-      }
+      setIsNotFoundView(true);
+      setIsVerifiedView(false);
     } finally {
       setIsVerifyingId(false);
     }
@@ -1213,9 +1188,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
                     <div className="grid grid-cols-2 gap-1.5 text-[10px] font-mono">
                       {[
                         { amount: '$50', duration: '1 Month', tag: '' },
-                        { amount: '$100', duration: '3 Mos', tag: 'Best' },
-                        { amount: '$200', duration: '6 Months', tag: '' },
-                        { amount: '$500', duration: '1 Year', tag: '' },
+                        { amount: '$100', duration: '3 Mos', tag: 'Popular' },
+                        { amount: '$200', duration: '1 Year', tag: 'Best Value' },
                       ].map((tier) => {
                         const isSelected = selectedPocketTier.includes(`${tier.amount} `) || selectedPocketTier.includes(`${tier.amount} Deposit`);
                         return (
@@ -1244,18 +1218,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
                       <button
                         type="button"
                         onClick={() => {
-                          const val = 'Pocket Option $1,000+ Deposit (Lifetime VIP)';
+                          const val = 'Pocket Option $300 Deposit (Lifetime VIP)';
                           setSelectedPocketTier(val);
                           localStorage.setItem('atm_selected_plan', val);
                         }}
-                        className={`col-span-2 p-2 rounded-xl border text-left font-bold flex justify-between items-center px-3 transition-all cursor-pointer ${
-                          selectedPocketTier.includes('$1,000+')
+                        className={`p-2 rounded-xl border text-left font-bold flex justify-between items-center px-2.5 transition-all cursor-pointer ${
+                          selectedPocketTier.includes('$300')
                             ? 'bg-amber-500/25 border-amber-400 text-white shadow-[0_0_15px_rgba(251,191,36,0.35)] ring-1 ring-amber-400'
                             : 'bg-amber-500/10 border-amber-500/30 text-amber-300 hover:border-amber-400/50'
                         }`}
                       >
-                        <span className="text-white font-mono">$1,000+</span>
-                        <span className="text-amber-300 font-sans text-[10px]">👑 Lifetime VIP Access</span>
+                        <span className="text-white font-mono">$300</span>
+                        <span className="text-amber-300 font-sans text-[9px]">👑 Lifetime VIP</span>
                       </button>
                     </div>
                   </div>
@@ -1312,28 +1286,51 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
                       );
                     })}
 
-                    {/* Lifetime Best Seller */}
+                    {/* Lifetime Institutional VIP Card (Sleek Compact & Ultra-Premium) */}
                     <button
                       type="button"
                       onClick={() => {
-                        const val = 'Lifetime VIP Access ($297)';
+                        const val = 'Lifetime VIP Access ($247)';
                         setSelectedDirectPlan(val);
                         localStorage.setItem('atm_selected_plan', val);
                       }}
-                      className={`w-full flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer text-left text-xs ${
-                        selectedDirectPlan.includes('$297')
-                          ? 'bg-amber-500/25 border-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.35)] ring-1 ring-amber-400'
-                          : 'bg-gradient-to-r from-amber-500/15 via-purple-500/15 to-pink-500/15 border-amber-400/60 hover:border-amber-400'
+                      className={`w-full p-2.5 rounded-xl border text-left transition-all duration-200 cursor-pointer relative overflow-hidden group ${
+                        selectedDirectPlan.includes('$247')
+                          ? 'bg-gradient-to-b from-[#131b2e] via-[#0b1222] to-[#060a14] border-amber-400/80 shadow-[0_0_18px_rgba(245,158,11,0.25)] ring-1 ring-amber-400/60'
+                          : 'bg-gradient-to-b from-[#0f172a]/90 to-[#060a14]/90 border-amber-500/35 hover:border-amber-400/60'
                       }`}
                     >
-                      <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.9)] animate-pulse"></span>
-                        <div>
-                          <span className="text-amber-200 font-bold">Lifetime VIP Access</span>
-                          <span className="text-[9px] text-amber-300 block">👑 Best Seller · Never Pay Again</span>
+                      {/* Subtle Golden Ambient Glow on Top Edge */}
+                      <div className="absolute top-0 inset-x-0 h-[1.5px] bg-gradient-to-r from-transparent via-amber-400 to-transparent opacity-80" />
+
+                      {/* Row 1: Title + Mini Allocation Badge + Save + Price ($397 -> $247) */}
+                      <div className="flex items-center justify-between gap-1.5 mb-1.5">
+                        <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                          <span className="text-xs font-bold text-white tracking-wide shrink-0">👑 Lifetime VIP</span>
+                          <span className="text-[8px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-400/10 border border-amber-400/30 text-amber-300 uppercase tracking-wider whitespace-nowrap">
+                            V4.0 Allocation
+                          </span>
+                          <span className="text-[8px] font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1 py-0.5 rounded whitespace-nowrap">
+                            Save $150
+                          </span>
+                        </div>
+
+                        <div className="flex items-baseline gap-1 font-mono shrink-0">
+                          <span className="text-[10px] text-slate-400 line-through font-normal">$397</span>
+                          <span className="text-sm font-black text-amber-300 tracking-tight">$247</span>
                         </div>
                       </div>
-                      <span className="font-mono font-black text-amber-300 text-sm">$297</span>
+
+                      {/* Row 2: Sub-telemetry & Slim Progress Bar */}
+                      <div>
+                        <div className="flex justify-between items-center text-[9px] font-mono text-slate-400 mb-1">
+                          <span>Never Pay Again · <strong className="text-slate-200 font-semibold">84/100 Seats</strong></span>
+                          <span className="text-amber-400 font-semibold">Only 16 Left</span>
+                        </div>
+                        <div className="w-full h-1 bg-slate-950 rounded-full overflow-hidden border border-amber-500/20">
+                          <div className="h-full bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-300 rounded-full w-[84%]" />
+                        </div>
+                      </div>
                     </button>
                   </div>
                 </>
@@ -1556,8 +1553,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
                       {[
                         { level: 'Level 1:', amount: '$50', duration: '1 Month' },
                         { level: 'Level 2:', amount: '$100', duration: '3 Months' },
-                        { level: 'Level 3:', amount: '$200', duration: '6 Months' },
-                        { level: 'Level 4:', amount: '$500', duration: '1 Year' },
+                        { level: 'Level 3:', amount: '$200', duration: '1 Year' },
                       ].map((tier) => {
                         const isSelected = selectedPocketTier.includes(`${tier.amount} `) || selectedPocketTier.includes(`${tier.amount} Deposit`);
                         return (
@@ -1585,20 +1581,20 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
                       <button
                         type="button"
                         onClick={() => {
-                          const val = 'Pocket Option $1,000+ Deposit (Lifetime VIP)';
+                          const val = 'Pocket Option $300 Deposit (Lifetime VIP)';
                           setSelectedPocketTier(val);
                           try {
                             localStorage.setItem('atm_selected_plan', val);
                           } catch {}
                         }}
-                        className={`col-span-2 p-1.5 rounded-lg border text-center font-bold flex justify-between items-center px-2.5 transition-all cursor-pointer ${
-                          selectedPocketTier.includes('$1,000+')
+                        className={`p-1.5 rounded-lg border text-left font-bold flex justify-between items-center px-2 transition-all cursor-pointer ${
+                          selectedPocketTier.includes('$300')
                             ? 'bg-amber-500/30 border-amber-400 text-white shadow-[0_0_12px_rgba(251,191,36,0.4)] ring-1 ring-amber-400'
                             : 'bg-gradient-to-r from-amber-500/15 via-yellow-500/10 to-amber-500/15 border border-amber-500/40 text-amber-300 hover:border-amber-400/60'
                         }`}
                       >
-                        <span>Level 5: <strong className="text-white">$1,000+</strong></span>
-                        <span className="text-amber-300 font-extrabold text-[10px] font-sans">👑 Lifetime VIP Access</span>
+                        <span>VIP: <strong className="text-white">$300</strong></span>
+                        <span className="text-amber-300 font-extrabold text-[9px] font-sans">👑 Lifetime</span>
                       </button>
                     </div>
                     <p className="text-[10px] text-slate-400 leading-tight">
@@ -1644,20 +1640,34 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
                       <button
                         type="button"
                         onClick={() => {
-                          const val = 'Lifetime VIP Access ($297)';
+                          const val = 'Lifetime VIP Access ($247)';
                           setSelectedDirectPlan(val);
                           try {
                             localStorage.setItem('atm_selected_plan', val);
                           } catch {}
                         }}
-                        className={`w-full flex justify-between p-1.5 rounded-lg border transition-all cursor-pointer text-left ${
-                          selectedDirectPlan.includes('$297')
-                            ? 'bg-amber-500/30 border-amber-400 text-white ring-1 ring-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.35)]'
-                            : 'bg-amber-500/15 border-amber-500/30 text-amber-300 hover:border-amber-400/50'
+                        className={`w-full p-2.5 rounded-xl border transition-all cursor-pointer text-left relative overflow-hidden ${
+                          selectedDirectPlan.includes('$247')
+                            ? 'bg-gradient-to-b from-[#131b2e] via-[#0b1222] to-[#060a14] border-amber-400/80 shadow-[0_0_15px_rgba(251,191,36,0.2)] ring-1 ring-amber-400/70'
+                            : 'bg-gradient-to-b from-[#0f172a] to-[#050811] border-amber-500/30 hover:border-amber-400/50'
                         }`}
                       >
-                        <span className="font-bold">👑 Lifetime VIP Access</span>
-                        <strong className="font-mono text-amber-300">$297</strong>
+                        <div className="flex justify-between items-center mb-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-white text-xs">Lifetime VIP Access</span>
+                            <span className="text-[8px] font-mono px-1.5 py-0.5 bg-amber-400/10 border border-amber-400/30 text-amber-300 font-bold rounded uppercase">
+                              V4.0 ALLOCATION
+                            </span>
+                          </div>
+                          <div className="flex items-baseline gap-1.5 font-mono">
+                            <span className="text-slate-400 line-through text-[10px] font-normal">$397</span>
+                            <strong className="text-amber-300 font-black text-sm">$247</strong>
+                          </div>
+                        </div>
+                        <div className="flex justify-between items-center text-[9px] text-slate-300">
+                          <span>Never Pay Again · Save $150</span>
+                          <span className="text-amber-400 font-mono font-semibold">16 Seats Left</span>
+                        </div>
                       </button>
                     </div>
                   </>
@@ -1668,11 +1678,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
               <div className="flex flex-col gap-2.5">
                 <button
                   onClick={() => {
+                    setActiveTab('code');
                     window.scrollTo({ top: 0, behavior: 'smooth' });
+                    setErrorMessage('Please enter your 7-Digit Access Code below to open Trade Manager.');
                   }}
                   className="w-full py-3.5 rounded-2xl font-black text-sm sm:text-base bg-gradient-to-r from-[#00c6ff] via-[#00b4d8] to-[#0096c7] text-[#051329] shadow-[0_4px_20px_rgba(0,180,216,0.35)] hover:opacity-95 transition-all cursor-pointer flex items-center justify-center active:scale-[0.98] text-center"
                 >
-                  🚀 Instant Access (ID / Crypto Key)
+                  🔑 Enter 7-Digit Access Code to Open Dashboard
                 </button>
 
                 <button

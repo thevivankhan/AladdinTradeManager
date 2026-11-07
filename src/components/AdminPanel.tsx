@@ -1,15 +1,14 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { AdminTradingRoom } from "./AdminTradingRoom";
 import { 
   CheckCircle2, XCircle, Clock, ShieldCheck, User, 
   Users, Key, Search, Shield, Copy, RefreshCw, Wrench,
   Smartphone, Monitor, Trash2, Power, PowerOff, Download, UserPlus,
   Image as ImageIcon, X, Eye, EyeOff, ShieldOff, Activity, Mail,
-  Send, MessageCircle, Sparkles, Check, UserCheck, Bell
+  Send, MessageCircle, Sparkles, Check, UserCheck
 } from "lucide-react";
 import {
   getIssuedLicenses,
-  syncLicensesFromServer,
   issueNewLicense,
   renewLicense,
   toggleSuspendLicense,
@@ -22,12 +21,7 @@ import {
   StudentApplication,
   getStudentApplications,
   approveStudentApplication,
-  rejectStudentApplication,
-  deleteStudentApplication,
-  getTawkToPropertyId,
-  setTawkToPropertyId,
-  getTawkToWidgetId,
-  setTawkToWidgetId
+  rejectStudentApplication
 } from '../lib/licenseEngine';
 
 const logout = () => { 
@@ -69,72 +63,20 @@ export const AdminPanel = ({
   const [vaultSearchQuery, setVaultSearchQuery] = useState("");
   const [copiedKeyId, setCopiedKeyId] = useState<string | null>(null);
 
-  // Tawk.to settings state
-  const [tawkPropInput, setTawkPropInput] = useState("");
-  const [tawkWidgetInput, setTawkWidgetInput] = useState("default");
-  const [tawkSavedMsg, setTawkSavedMsg] = useState("");
+
 
   // Pocket Option Trader IDs Whitelist State
   const [verifiedTraderIds, setVerifiedTraderIds] = useState<string[]>([]);
   const [newTraderIdInput, setNewTraderIdInput] = useState("");
   const [isUpdatingTraderIds, setIsUpdatingTraderIds] = useState(false);
 
-  // Live student signup alert state
-  const [newSignupAlert, setNewSignupAlert] = useState<{ name: string; contact: string; deviceName?: string } | null>(null);
-  const panelMountedAtRef = useRef<number>(Date.now());
-  const seenApplicantIdsRef = useRef<Set<string>>(new Set());
-
-  const playNotificationSound = () => {
-    try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
-      if (ctx.state === 'suspended') {
-        ctx.resume();
-      }
-      const now = ctx.currentTime;
-      // High-end dual bell chime (E5 -> B5)
-      const osc1 = ctx.createOscillator();
-      const gain1 = ctx.createGain();
-      osc1.type = 'sine';
-      osc1.frequency.setValueAtTime(659.25, now);
-      gain1.gain.setValueAtTime(0.3, now);
-      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
-      osc1.connect(gain1);
-      gain1.connect(ctx.destination);
-      osc1.start(now);
-      osc1.stop(now + 0.35);
-
-      const osc2 = ctx.createOscillator();
-      const gain2 = ctx.createGain();
-      osc2.type = 'sine';
-      osc2.frequency.setValueAtTime(987.77, now + 0.15);
-      gain2.gain.setValueAtTime(0.35, now + 0.15);
-      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
-      osc2.connect(gain2);
-      gain2.connect(ctx.destination);
-      osc2.start(now + 0.15);
-      osc2.stop(now + 0.55);
-    } catch (e) {
-      console.debug('Notification chime fallback', e);
-    }
-  };
-
   const refreshStudentApps = () => {
-    const local = getStudentApplications();
-    setStudentApps(local);
-    local.forEach(a => {
-      if (a && a.id) seenApplicantIdsRef.current.add(a.id);
-    });
-
+    setStudentApps(getStudentApplications());
     fetch('/api/student-applications')
       .then(res => res.json())
       .then(data => {
         if (data && Array.isArray(data.applications)) {
           setStudentApps(data.applications);
-          data.applications.forEach((a: any) => {
-            if (a && a.id) seenApplicantIdsRef.current.add(a.id);
-          });
         }
       })
       .catch(() => {});
@@ -142,12 +84,7 @@ export const AdminPanel = ({
 
   useEffect(() => {
     setVaultLicenses(getIssuedLicenses());
-    syncLicensesFromServer().then((lics) => {
-      if (lics && lics.length > 0) setVaultLicenses(lics);
-    });
     refreshStudentApps();
-    setTawkPropInput(getTawkToPropertyId());
-    setTawkWidgetInput(getTawkToWidgetId());
 
     fetch('/api/admin/trader-ids')
       .then((res) => res.json())
@@ -157,40 +94,6 @@ export const AdminPanel = ({
         }
       })
       .catch(() => {});
-
-    // Polling every 2.5 seconds for instant real-time notification of new student applications
-    // STRICT RULE: Old applications existing prior to page refresh/load NEVER play sound or banner!
-    const pollInterval = setInterval(() => {
-      fetch('/api/student-applications/status')
-        .then((res) => res.json())
-        .then((data) => {
-          if (data && data.success) {
-            const latestId = data.latestId;
-            const latestSubmittedAt = data.latestSubmittedAt || 0;
-
-            if (latestId) {
-              if (!seenApplicantIdsRef.current.has(latestId)) {
-                // If submitted strictly after admin panel opened, trigger chime and live alert
-                if (latestSubmittedAt > panelMountedAtRef.current) {
-                  playNotificationSound();
-                  if (data.latestApplicant) {
-                    setNewSignupAlert({
-                      name: data.latestApplicant.name || 'New Student',
-                      contact: data.latestApplicant.contact || '',
-                      deviceName: data.latestApplicant.deviceName || data.latestApplicant.deviceId,
-                    });
-                  }
-                  refreshStudentApps();
-                }
-                seenApplicantIdsRef.current.add(latestId);
-              }
-            }
-          }
-        })
-        .catch(() => {});
-    }, 2500);
-
-    return () => clearInterval(pollInterval);
   }, []);
 
   const handleAddTraderId = async (e: React.FormEvent) => {
@@ -855,7 +758,7 @@ export const AdminPanel = ({
 
       {/* Custom Modal */}
       {modalConfig.isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-md w-full shadow-2xl">
             <h3 className="text-xl font-bold text-white mb-2">
               {modalConfig.title}
@@ -864,25 +767,22 @@ export const AdminPanel = ({
             <div className="flex justify-end gap-3">
               {modalConfig.type === "confirm" && (
                 <button
-                  type="button"
                   onClick={() =>
                     setModalConfig({ ...modalConfig, isOpen: false })
                   }
-                  className="px-4 py-2 rounded-lg font-bold text-sm bg-slate-800 hover:bg-slate-700 text-white transition-colors cursor-pointer"
+                  className="px-4 py-2 rounded-lg font-bold text-sm bg-slate-800 hover:bg-slate-700 text-white transition-colors"
                 >
                   Cancel
                 </button>
               )}
               <button
-                type="button"
-                onClick={async () => {
-                  const onConfirm = modalConfig.onConfirm;
-                  setModalConfig((prev) => ({ ...prev, isOpen: false }));
-                  if (modalConfig.type === "confirm" && onConfirm) {
-                    await onConfirm();
+                onClick={() => {
+                  setModalConfig({ ...modalConfig, isOpen: false });
+                  if (modalConfig.type === "confirm" && modalConfig.onConfirm) {
+                    modalConfig.onConfirm();
                   }
                 }}
-                className="px-4 py-2 rounded-lg font-bold text-sm bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition-colors cursor-pointer"
+                className="px-4 py-2 rounded-lg font-bold text-sm bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition-colors"
               >
                 {modalConfig.type === "confirm" ? "Confirm" : "OK"}
               </button>
@@ -1209,47 +1109,6 @@ export const AdminPanel = ({
           </div>
         </div>
 
-        {/* Live Incoming Signup Alert Banner */}
-        {newSignupAlert && (
-          <div className="p-4 bg-gradient-to-r from-cyan-950/90 via-slate-900/90 to-emerald-950/90 border border-cyan-400/60 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-[0_0_25px_rgba(6,182,212,0.35)] animate-pulse">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-cyan-500/20 border border-cyan-400/50 flex items-center justify-center text-cyan-300 shrink-0">
-                <Bell className="w-5 h-5 animate-bounce" />
-              </div>
-              <div>
-                <div className="text-sm font-black text-white flex items-center gap-2 flex-wrap">
-                  <span>🔔 New Student Registration Received!</span>
-                  <span className="text-[10px] bg-cyan-400 text-slate-950 px-2 py-0.5 rounded font-black uppercase tracking-wider">Live Notification</span>
-                </div>
-                <p className="text-xs text-slate-300 mt-0.5">
-                  <strong className="text-cyan-300 font-bold">{newSignupAlert.name}</strong>
-                  {newSignupAlert.contact ? ` (${newSignupAlert.contact})` : ''} just submitted registration from{' '}
-                  <strong className="text-white">{newSignupAlert.deviceName || 'Student Device'}</strong>.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
-              <button
-                onClick={() => {
-                  setActiveTab('studentApps');
-                  setNewSignupAlert(null);
-                }}
-                className="px-4 py-2 bg-gradient-to-r from-cyan-400 to-emerald-400 hover:from-cyan-300 hover:to-emerald-300 text-slate-950 text-xs font-black rounded-lg transition-all shadow-md shadow-cyan-500/20 cursor-pointer flex items-center gap-1.5"
-              >
-                <Check className="w-4 h-4" />
-                <span>Review & Issue Key</span>
-              </button>
-              <button
-                onClick={() => setNewSignupAlert(null)}
-                className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
-                title="Dismiss"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* Stats Overview */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center gap-4">
@@ -1501,7 +1360,7 @@ export const AdminPanel = ({
                     No student applications yet. When a new user registers on the Sign-Up tab, their request will appear here.
                   </div>
                 ) : (
-                  <div className="space-y-3 pb-24">
+                  <div className="space-y-3">
                     {studentApps.map((app) => {
                       const isPending = app.status === 'pending';
                       const isApproved = app.status === 'approved';
@@ -1569,162 +1428,85 @@ export const AdminPanel = ({
                               )}
                             </div>
 
-                            {/* Responsive Actions */}
-                            <div className="flex flex-col sm:flex-row sm:items-center gap-2 pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-800/80 w-full lg:w-auto">
+                            {/* Actions */}
+                            <div className="flex items-center gap-2 shrink-0">
                               {isPending && (
-                                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full">
+                                <>
                                   <select
                                     id={`plan-${app.id}`}
                                     defaultValue="1 Month ($47)"
-                                    className="bg-slate-950 border border-slate-700 text-white text-xs px-3 py-2 rounded-xl focus:outline-none focus:border-cyan-500 w-full sm:w-auto"
+                                    className="bg-slate-950 border border-slate-700 text-white text-xs px-2.5 py-1.5 rounded-lg focus:outline-none focus:border-cyan-500"
                                   >
                                     <option value="1 Month ($47)">1 Month ($47)</option>
                                     <option value="3 Months ($97)">3 Months ($97)</option>
                                     <option value="6 Months ($147)">6 Months ($147)</option>
                                     <option value="1 Year ($197)">1 Year ($197)</option>
-                                    <option value="Lifetime VIP ($297)">Lifetime VIP ($297)</option>
+                                    <option value="Lifetime VIP ($247)">Lifetime VIP ($247)</option>
                                   </select>
 
-                                  <div className="flex items-center gap-2 w-full sm:w-auto">
-                                    <button
-                                      onClick={() => {
-                                        const select = document.getElementById(`plan-${app.id}`) as HTMLSelectElement;
-                                        const chosenPlan = (select?.value || "1 Month ($47)") as LicenseKey['plan'];
-                                        const result = approveStudentApplication(app.id, chosenPlan);
-                                        if (result) {
-                                          fetch('/api/licenses', {
-                                            method: 'POST',
-                                            headers: { 'Content-Type': 'application/json' },
-                                            body: JSON.stringify(result.license),
-                                          }).catch(() => {});
-                                          refreshStudentApps();
-                                          setVaultLicenses(getIssuedLicenses());
-                                          const text = generateVipPassText(result.license);
-                                          try { navigator.clipboard.writeText(text); } catch {}
-                                          setModalConfig({
-                                            isOpen: true,
-                                            title: '✅ Application Approved!',
-                                            message: `Key "${result.license.key}" has been issued to ${app.name}. VIP Access Pass copied to clipboard!`,
-                                            type: 'alert'
-                                          });
-                                        }
-                                      }}
-                                      className="flex-1 sm:flex-initial bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-300 hover:to-teal-300 text-slate-950 font-black text-xs px-4 py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer whitespace-nowrap"
-                                    >
-                                      <Check className="w-4 h-4 stroke-[3]" />
-                                      <span>Approve & Issue Key</span>
-                                    </button>
+                                  <button
+                                    onClick={() => {
+                                      const select = document.getElementById(`plan-${app.id}`) as HTMLSelectElement;
+                                      const chosenPlan = (select?.value || "1 Month ($47)") as LicenseKey['plan'];
+                                      const result = approveStudentApplication(app.id, chosenPlan);
+                                      if (result) {
+                                        refreshStudentApps();
+                                        setVaultLicenses(getIssuedLicenses());
+                                        const text = generateVipPassText(result.license);
+                                        navigator.clipboard.writeText(text);
+                                        alert(`✅ Approved!\nIssued Key: ${result.license.key}\nVIP Access Pass copied to clipboard for Telegram!`);
+                                      }
+                                    }}
+                                    className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 shadow-md shadow-emerald-500/20 cursor-pointer"
+                                  >
+                                    <Check className="w-3.5 h-3.5" />
+                                    <span>Approve & Issue ATM-Key</span>
+                                  </button>
 
-                                    {app.contact && (
-                                      <a
-                                        href={
-                                          app.contact.startsWith('@')
-                                            ? `https://t.me/${app.contact.replace('@', '')}`
-                                            : `https://t.me/share/url?url=https://aladdin.org.in&text=${encodeURIComponent(`Hi ${app.name}, your Aladdin Trade Manager application has been received!`)}`
-                                        }
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="h-10 w-10 shrink-0 flex items-center justify-center rounded-xl bg-sky-500/15 hover:bg-sky-500/25 text-sky-400 border border-sky-500/30 transition-all cursor-pointer active:scale-95"
-                                        title="Chat on Telegram"
-                                        aria-label="Telegram"
-                                      >
-                                        <Send className="w-4 h-4" />
-                                      </a>
-                                    )}
-
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setModalConfig({
-                                          isOpen: true,
-                                          title: 'Reject & Remove Registration',
-                                          message: `Are you sure you want to remove the registration request for "${app.name}"?`,
-                                          type: 'confirm',
-                                          onConfirm: async () => {
-                                            setStudentApps((prev) => prev.filter((a) => a.id !== app.id));
-                                            try {
-                                              await deleteStudentApplication(app.id);
-                                            } finally {
-                                              refreshStudentApps();
-                                            }
-                                          },
-                                        });
-                                      }}
-                                      className="h-10 w-10 shrink-0 flex items-center justify-center rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30 transition-all cursor-pointer active:scale-95"
-                                      title="Reject & Delete Application"
-                                      aria-label="Reject"
-                                    >
-                                      <X className="w-4 h-4 stroke-[2.5]" />
-                                    </button>
-                                  </div>
-                                </div>
+                                  <button
+                                    onClick={() => {
+                                      if (confirm(`Reject registration for ${app.name}?`)) {
+                                        rejectStudentApplication(app.id);
+                                        refreshStudentApps();
+                                      }
+                                    }}
+                                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-900/40 text-slate-400 hover:text-rose-400 transition-colors cursor-pointer"
+                                    title="Reject"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                </>
                               )}
 
                               {isApproved && app.issuedKey && (
-                                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-                                  <button
-                                    onClick={() => {
-                                      const matchingLic = vaultLicenses.find(l => l.key === app.issuedKey || l.cleanKey === app.issuedKey);
-                                      const passText = matchingLic ? generateVipPassText(matchingLic) : (app.issuedKey || '');
-                                      try { navigator.clipboard.writeText(passText); } catch {}
+                                <button
+                                  onClick={() => {
+                                    const matchingLic = vaultLicenses.find(l => l.key === app.issuedKey || l.cleanKey === app.issuedKey);
+                                    if (matchingLic) {
+                                      const passText = generateVipPassText(matchingLic);
+                                      navigator.clipboard.writeText(passText);
                                       setCopiedKeyId(app.id);
                                       setTimeout(() => setCopiedKeyId(null), 2000);
-                                    }}
-                                    className="flex-1 sm:flex-initial bg-slate-800 hover:bg-slate-700 text-cyan-300 font-bold text-xs px-3.5 py-2.5 rounded-xl border border-cyan-500/30 transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
-                                  >
-                                    {copiedKeyId === app.id ? (
-                                      <>
-                                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                                        <span>Copied VIP Pass!</span>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Copy className="w-3.5 h-3.5" />
-                                        <span>Copy Telegram Pass</span>
-                                      </>
-                                    )}
-                                  </button>
-
-                                  <a
-                                    href={`https://t.me/share/url?url=https://aladdin.org.in&text=${encodeURIComponent(
-                                      (() => {
-                                        const matchingLic = vaultLicenses.find(l => l.key === app.issuedKey || l.cleanKey === app.issuedKey);
-                                        return matchingLic ? generateVipPassText(matchingLic) : `✨ Your Aladdin Trade Manager Key: ${app.issuedKey} ✨`;
-                                      })()
-                                    )}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="h-10 px-3 shrink-0 flex items-center justify-center gap-1 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-500/30 font-bold text-xs transition-all cursor-pointer active:scale-95"
-                                    title="Open Telegram to Send Key"
-                                  >
-                                    <Send className="w-3.5 h-3.5" />
-                                    <span>Telegram</span>
-                                  </a>
-
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setModalConfig({
-                                        isOpen: true,
-                                        title: 'Remove Record',
-                                        message: `Remove this registration card for "${app.name}"? (The issued key in the Crypto Vault will stay safe).`,
-                                        type: 'confirm',
-                                        onConfirm: async () => {
-                                          setStudentApps((prev) => prev.filter((a) => a.id !== app.id));
-                                          try {
-                                            await deleteStudentApplication(app.id);
-                                          } finally {
-                                            refreshStudentApps();
-                                          }
-                                        },
-                                      });
-                                    }}
-                                    className="h-10 w-10 shrink-0 flex items-center justify-center rounded-xl bg-slate-800/80 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-slate-700 transition-all cursor-pointer active:scale-95"
-                                    title="Remove Card"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                </div>
+                                    } else {
+                                      navigator.clipboard.writeText(app.issuedKey || '');
+                                      setCopiedKeyId(app.id);
+                                      setTimeout(() => setCopiedKeyId(null), 2000);
+                                    }
+                                  }}
+                                  className="bg-slate-800 hover:bg-slate-700 text-cyan-300 font-bold text-xs px-3 py-1.5 rounded-lg border border-cyan-500/30 transition-all flex items-center gap-1.5 cursor-pointer"
+                                >
+                                  {copiedKeyId === app.id ? (
+                                    <>
+                                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                                      <span>Copied VIP Pass!</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Copy className="w-3.5 h-3.5" />
+                                      <span>Copy Telegram Pass</span>
+                                    </>
+                                  )}
+                                </button>
                               )}
                             </div>
                           </div>
@@ -1902,7 +1684,7 @@ export const AdminPanel = ({
                           <option value="3 Months ($97)">3 Months ($97) — 90 Days</option>
                           <option value="6 Months ($147)">6 Months ($147) — 180 Days</option>
                           <option value="1 Year ($197)">1 Year ($197) — 365 Days</option>
-                          <option value="Lifetime VIP ($297)">Lifetime VIP ($297) — Unlimited</option>
+                          <option value="Lifetime VIP ($247)">Lifetime VIP ($247) — Unlimited</option>
                         </select>
                       </div>
                     </div>
@@ -3164,99 +2946,7 @@ export const AdminPanel = ({
                   )}
                 </div>
 
-                {/* Tool 3: Tawk.to Free Live Chat Integration */}
-                <div className="bg-slate-950 border border-emerald-500/30 rounded-2xl p-6 flex flex-col lg:col-span-2">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-emerald-500/10 rounded-xl flex items-center justify-center border border-emerald-500/25">
-                        <MessageCircle className="w-5 h-5 text-emerald-400" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="text-lg font-bold text-white">Tawk.to Live Chat Desk</h3>
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-                            100% Free Forever
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-400">Connect in-browser live chat directly to your phone app</p>
-                      </div>
-                    </div>
 
-                    <div className="flex items-center gap-2">
-                      {tawkPropInput ? (
-                        <span className="flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-950/60 border border-emerald-500/40 px-2.5 py-1 rounded-lg font-mono">
-                          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                          Live Chat Active
-                        </span>
-                      ) : (
-                        <span className="text-xs text-slate-500 bg-slate-900 border border-slate-800 px-2.5 py-1 rounded-lg">
-                          Not Configured Yet
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  <p className="text-xs text-slate-400 mb-4 leading-relaxed">
-                    Install the free <strong>Tawk.to</strong> mobile app from Google Play / App Store. When students message on Aladdin Trade Manager, you will receive real-time notifications on your phone and reply without exposing any personal contact numbers!
-                  </p>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                        Tawk.to Property ID *
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="6aedf91657710a4002b40288"
-                        value={tawkPropInput}
-                        onChange={(e) => setTawkPropInput(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-white font-mono text-xs focus:outline-none focus:border-emerald-500"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                        Tawk.to Widget ID
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="default"
-                        value={tawkWidgetInput}
-                        onChange={(e) => setTawkWidgetInput(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-white font-mono text-xs focus:outline-none focus:border-emerald-500"
-                      />
-                    </div>
-                  </div>
-
-                  {tawkSavedMsg && (
-                    <div className="mb-4 text-xs text-emerald-400 bg-emerald-950/50 border border-emerald-500/30 p-2.5 rounded-xl flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                      <span>{tawkSavedMsg}</span>
-                    </div>
-                  )}
-
-                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2 border-t border-slate-800">
-                    <p className="text-[11px] text-slate-500">
-                      Get your ID from <strong>tawk.to → Administration → Property Settings → Property ID</strong>.
-                    </p>
-                    <button
-                      onClick={() => {
-                        setTawkToPropertyId(tawkPropInput);
-                        setTawkToWidgetId(tawkWidgetInput);
-                        fetch('/api/tawk-config', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ propertyId: tawkPropInput, widgetId: tawkWidgetInput })
-                        }).catch(() => {});
-                        setTawkSavedMsg("✅ Tawk.to Configuration Saved! Reload the app to initialize the live chat widget.");
-                        setTimeout(() => setTawkSavedMsg(""), 4000);
-                      }}
-                      className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs py-2 px-5 rounded-xl transition-all shadow-md shadow-emerald-500/20 cursor-pointer self-stretch sm:self-auto"
-                    >
-                      Save & Enable Live Chat
-                    </button>
-                  </div>
-                </div>
               </div>
             </>
           )}

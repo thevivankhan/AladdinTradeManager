@@ -203,24 +203,3 @@ html, body, #root {
   }
 }
 
-/* Compact Tawk.to Live Chat Icon - 35% smaller & unobtrusive placement */
-#tawk-bubble-container,
-div[id*="tawk-bubble"],
-.tawk-min-container,
-div[class*="tawk-min"],
-iframe[title*="chat widget" i]:not([style*="height: 100%"]):not([style*="height:100%"]):not([style*="height: 5"]):not([style*="height:5"]),
-iframe[src*="tawk.to"]:not([style*="height: 100%"]):not([style*="height:100%"]):not([style*="height: 5"]):not([style*="height:5"]) {
-  transform: scale(0.65) !important;
-  transform-origin: bottom right !important;
-  bottom: 8px !important;
-  right: 8px !important;
-}
-
-/* Ensure maximized chat box remains normal readable size */
-div[id*="tawk-chat-container"],
-iframe[title*="chat widget" i][style*="height: 100%"],
-iframe[title*="chat widget" i][style*="height:100%"],
-iframe[title*="chat widget" i][style*="height: 5"],
-iframe[title*="chat widget" i][style*="height:5"] {
-  transform: none !important;
-}
