@@ -12,7 +12,6 @@ import {
   MessageCircle,
   Play,
   Pause,
-  Volume2,
   VolumeX,
   Maximize,
   CheckCircle2,
@@ -234,16 +233,17 @@ const VideoShowcase: React.FC<{ aboutUsTitle: string }> = React.memo(({ aboutUsT
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [isShutterOpen, setIsShutterOpen] = useState<boolean>(false);
   const [activeClipId, setActiveClipId] = useState<string>('overview');
-  const [isMuted, setIsMuted] = useState<boolean>(true);
+  const isMuted = true;
 
   const activeClip = TUTORIAL_CLIPS.find((c) => c.id === activeClipId) || TUTORIAL_CLIPS[0];
   const activeMaxSeconds = activeClip.durationSeconds;
 
   useEffect(() => {
     if (videoRef.current) {
-      videoRef.current.muted = isMuted;
+      videoRef.current.muted = true;
+      videoRef.current.volume = 0;
     }
-  }, [isMuted]);
+  }, [activeClipId]);
 
   const togglePlay = () => {
     if (videoRef.current) {
@@ -251,16 +251,10 @@ const VideoShowcase: React.FC<{ aboutUsTitle: string }> = React.memo(({ aboutUsT
         videoRef.current.pause();
         setIsPlaying(false);
       } else {
+        videoRef.current.muted = true;
+        videoRef.current.volume = 0;
         videoRef.current.play().then(() => setIsPlaying(true)).catch(() => {});
       }
-    }
-  };
-
-  const toggleMute = () => {
-    if (videoRef.current) {
-      const nextMuted = !isMuted;
-      videoRef.current.muted = nextMuted;
-      setIsMuted(nextMuted);
     }
   };
 
@@ -315,7 +309,11 @@ const VideoShowcase: React.FC<{ aboutUsTitle: string }> = React.memo(({ aboutUsT
             className="w-full h-full object-cover"
             playsInline
             loop
-            muted={isMuted}
+            muted
+            onVolumeChange={(e) => {
+              e.currentTarget.muted = true;
+              e.currentTarget.volume = 0;
+            }}
             onTimeUpdate={handleVideoTimeUpdate}
             onClick={togglePlay}
           />
@@ -375,17 +373,12 @@ const VideoShowcase: React.FC<{ aboutUsTitle: string }> = React.memo(({ aboutUsT
               </div>
 
               <div className="flex items-center gap-2.5">
-                <button
-                  onClick={toggleMute}
-                  className="text-slate-400 hover:text-cyan-400 transition-colors cursor-pointer flex items-center gap-1"
-                  title={isMuted ? 'Unmute Audio' : 'Mute Audio'}
+                <div
+                  className="text-slate-500 flex items-center gap-1 cursor-default select-none opacity-60"
+                  title="Audio Muted"
                 >
-                  {isMuted ? (
-                    <VolumeX className="w-4 h-4 text-slate-400" />
-                  ) : (
-                    <Volume2 className="w-4 h-4 text-emerald-400" />
-                  )}
-                </button>
+                  <VolumeX className="w-4 h-4 text-slate-500" />
+                </div>
                 <button
                   onClick={() => {
                     if (videoRef.current) {
