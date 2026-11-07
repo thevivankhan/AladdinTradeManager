@@ -23,6 +23,7 @@ import {
   getStudentApplications,
   approveStudentApplication,
   rejectStudentApplication,
+  deleteStudentApplication,
   getTawkToPropertyId,
   setTawkToPropertyId,
   getTawkToWidgetId,
@@ -1486,7 +1487,7 @@ export const AdminPanel = ({
                     No student applications yet. When a new user registers on the Sign-Up tab, their request will appear here.
                   </div>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-3 pb-24">
                     {studentApps.map((app) => {
                       const isPending = app.status === 'pending';
                       const isApproved = app.status === 'approved';
@@ -1554,14 +1555,14 @@ export const AdminPanel = ({
                               )}
                             </div>
 
-                            {/* Actions */}
-                            <div className="flex items-center gap-2 shrink-0">
+                            {/* Responsive Actions */}
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-2 pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-800/80 w-full lg:w-auto">
                               {isPending && (
-                                <>
+                                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full">
                                   <select
                                     id={`plan-${app.id}`}
                                     defaultValue="1 Month ($47)"
-                                    className="bg-slate-950 border border-slate-700 text-white text-xs px-2.5 py-1.5 rounded-lg focus:outline-none focus:border-cyan-500"
+                                    className="bg-slate-950 border border-slate-700 text-white text-xs px-3 py-2 rounded-xl focus:outline-none focus:border-cyan-500 w-full sm:w-auto"
                                   >
                                     <option value="1 Month ($47)">1 Month ($47)</option>
                                     <option value="3 Months ($97)">3 Months ($97)</option>
@@ -1570,69 +1571,138 @@ export const AdminPanel = ({
                                     <option value="Lifetime VIP ($297)">Lifetime VIP ($297)</option>
                                   </select>
 
-                                  <button
-                                    onClick={() => {
-                                      const select = document.getElementById(`plan-${app.id}`) as HTMLSelectElement;
-                                      const chosenPlan = (select?.value || "1 Month ($47)") as LicenseKey['plan'];
-                                      const result = approveStudentApplication(app.id, chosenPlan);
-                                      if (result) {
-                                        refreshStudentApps();
-                                        setVaultLicenses(getIssuedLicenses());
-                                        const text = generateVipPassText(result.license);
-                                        navigator.clipboard.writeText(text);
-                                        alert(`✅ Approved!\nIssued Key: ${result.license.key}\nVIP Access Pass copied to clipboard for Telegram!`);
-                                      }
-                                    }}
-                                    className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 shadow-md shadow-emerald-500/20 cursor-pointer"
-                                  >
-                                    <Check className="w-3.5 h-3.5" />
-                                    <span>Approve & Issue ATM-Key</span>
-                                  </button>
+                                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                                    <button
+                                      onClick={() => {
+                                        const select = document.getElementById(`plan-${app.id}`) as HTMLSelectElement;
+                                        const chosenPlan = (select?.value || "1 Month ($47)") as LicenseKey['plan'];
+                                        const result = approveStudentApplication(app.id, chosenPlan);
+                                        if (result) {
+                                          fetch('/api/licenses', {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify(result.license),
+                                          }).catch(() => {});
+                                          refreshStudentApps();
+                                          setVaultLicenses(getIssuedLicenses());
+                                          const text = generateVipPassText(result.license);
+                                          try { navigator.clipboard.writeText(text); } catch {}
+                                          setModalConfig({
+                                            isOpen: true,
+                                            title: '✅ Application Approved!',
+                                            message: `Key "${result.license.key}" has been issued to ${app.name}. VIP Access Pass copied to clipboard!`,
+                                            type: 'alert'
+                                          });
+                                        }
+                                      }}
+                                      className="flex-1 sm:flex-initial bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-300 hover:to-teal-300 text-slate-950 font-black text-xs px-4 py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer whitespace-nowrap"
+                                    >
+                                      <Check className="w-4 h-4 stroke-[3]" />
+                                      <span>Approve & Issue Key</span>
+                                    </button>
 
-                                  <button
-                                    onClick={() => {
-                                      if (confirm(`Reject registration for ${app.name}?`)) {
-                                        rejectStudentApplication(app.id);
-                                        refreshStudentApps();
-                                      }
-                                    }}
-                                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-900/40 text-slate-400 hover:text-rose-400 transition-colors cursor-pointer"
-                                    title="Reject"
-                                  >
-                                    <X className="w-4 h-4" />
-                                  </button>
-                                </>
+                                    {app.contact && (
+                                      <a
+                                        href={
+                                          app.contact.startsWith('@')
+                                            ? `https://t.me/${app.contact.replace('@', '')}`
+                                            : `https://t.me/share/url?url=https://aladdin.org.in&text=${encodeURIComponent(`Hi ${app.name}, your Aladdin Trade Manager application has been received!`)}`
+                                        }
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="h-10 w-10 shrink-0 flex items-center justify-center rounded-xl bg-sky-500/15 hover:bg-sky-500/25 text-sky-400 border border-sky-500/30 transition-all cursor-pointer active:scale-95"
+                                        title="Chat on Telegram"
+                                        aria-label="Telegram"
+                                      >
+                                        <Send className="w-4 h-4" />
+                                      </a>
+                                    )}
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setModalConfig({
+                                          isOpen: true,
+                                          title: 'Reject / Remove Registration',
+                                          message: `Are you sure you want to remove the registration request for "${app.name}"?`,
+                                          type: 'confirm',
+                                          onConfirm: () => {
+                                            deleteStudentApplication(app.id);
+                                            refreshStudentApps();
+                                          },
+                                        });
+                                      }}
+                                      className="h-10 w-10 shrink-0 flex items-center justify-center rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30 transition-all cursor-pointer active:scale-95"
+                                      title="Reject & Delete Application"
+                                      aria-label="Reject"
+                                    >
+                                      <X className="w-4 h-4 stroke-[2.5]" />
+                                    </button>
+                                  </div>
+                                </div>
                               )}
 
                               {isApproved && app.issuedKey && (
-                                <button
-                                  onClick={() => {
-                                    const matchingLic = vaultLicenses.find(l => l.key === app.issuedKey || l.cleanKey === app.issuedKey);
-                                    if (matchingLic) {
-                                      const passText = generateVipPassText(matchingLic);
-                                      navigator.clipboard.writeText(passText);
+                                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                                  <button
+                                    onClick={() => {
+                                      const matchingLic = vaultLicenses.find(l => l.key === app.issuedKey || l.cleanKey === app.issuedKey);
+                                      const passText = matchingLic ? generateVipPassText(matchingLic) : (app.issuedKey || '');
+                                      try { navigator.clipboard.writeText(passText); } catch {}
                                       setCopiedKeyId(app.id);
                                       setTimeout(() => setCopiedKeyId(null), 2000);
-                                    } else {
-                                      navigator.clipboard.writeText(app.issuedKey || '');
-                                      setCopiedKeyId(app.id);
-                                      setTimeout(() => setCopiedKeyId(null), 2000);
-                                    }
-                                  }}
-                                  className="bg-slate-800 hover:bg-slate-700 text-cyan-300 font-bold text-xs px-3 py-1.5 rounded-lg border border-cyan-500/30 transition-all flex items-center gap-1.5 cursor-pointer"
-                                >
-                                  {copiedKeyId === app.id ? (
-                                    <>
-                                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                                      <span>Copied VIP Pass!</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Copy className="w-3.5 h-3.5" />
-                                      <span>Copy Telegram Pass</span>
-                                    </>
-                                  )}
-                                </button>
+                                    }}
+                                    className="flex-1 sm:flex-initial bg-slate-800 hover:bg-slate-700 text-cyan-300 font-bold text-xs px-3.5 py-2.5 rounded-xl border border-cyan-500/30 transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                                  >
+                                    {copiedKeyId === app.id ? (
+                                      <>
+                                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                                        <span>Copied VIP Pass!</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Copy className="w-3.5 h-3.5" />
+                                        <span>Copy Telegram Pass</span>
+                                      </>
+                                    )}
+                                  </button>
+
+                                  <a
+                                    href={`https://t.me/share/url?url=https://aladdin.org.in&text=${encodeURIComponent(
+                                      (() => {
+                                        const matchingLic = vaultLicenses.find(l => l.key === app.issuedKey || l.cleanKey === app.issuedKey);
+                                        return matchingLic ? generateVipPassText(matchingLic) : `✨ Your Aladdin Trade Manager Key: ${app.issuedKey} ✨`;
+                                      })()
+                                    )}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="h-10 px-3 shrink-0 flex items-center justify-center gap-1 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-500/30 font-bold text-xs transition-all cursor-pointer active:scale-95"
+                                    title="Open Telegram to Send Key"
+                                  >
+                                    <Send className="w-3.5 h-3.5" />
+                                    <span>Telegram</span>
+                                  </a>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setModalConfig({
+                                        isOpen: true,
+                                        title: 'Remove Record',
+                                        message: `Remove this registration card for "${app.name}"? (The issued key in the Crypto Vault will stay safe).`,
+                                        type: 'confirm',
+                                        onConfirm: () => {
+                                          deleteStudentApplication(app.id);
+                                          refreshStudentApps();
+                                        },
+                                      });
+                                    }}
+                                    className="h-10 w-10 shrink-0 flex items-center justify-center rounded-xl bg-slate-800/80 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-slate-700 transition-all cursor-pointer active:scale-95"
+                                    title="Remove Card"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
                               )}
                             </div>
                           </div>

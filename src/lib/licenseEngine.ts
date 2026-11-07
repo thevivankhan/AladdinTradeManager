@@ -424,10 +424,27 @@ export const approveStudentApplication = (
 export const rejectStudentApplication = (appId: string): boolean => {
   const apps = getStudentApplications();
   const idx = apps.findIndex((a) => a.id === appId);
-  if (idx === -1) return false;
+  if (idx !== -1) {
+    apps[idx] = { ...apps[idx], status: 'rejected' };
+    saveStudentApplications(apps);
+  }
+  fetch('/api/student-applications/reject', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ appId }),
+  }).catch(() => {});
+  return true;
+};
 
-  apps[idx] = { ...apps[idx], status: 'rejected' };
-  saveStudentApplications(apps);
+export const deleteStudentApplication = (appId: string): boolean => {
+  const apps = getStudentApplications();
+  const filtered = apps.filter((a) => a.id !== appId);
+  saveStudentApplications(filtered);
+  fetch('/api/student-applications/delete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ appId }),
+  }).catch(() => {});
   return true;
 };
 

@@ -1,17 +1,5 @@
 [
   {
-    "id": "app-1794047426468-qc89",
-    "name": "Test Student",
-    "email": "teststudent@example.com",
-    "contact": "teststudent@example.com",
-    "traderId": "12345678",
-    "deviceId": "device_1794047426468",
-    "deviceName": "Device",
-    "submittedAt": 1794047426468,
-    "status": "pending",
-    "isNew": true
-  },
-  {
     "id": "app-1793967024609-8y3h",
     "name": "Raul",
     "contact": "6390805060",
