@@ -410,6 +410,23 @@ app.post('/api/student-applications/approve', (req, res) => {
   }
 });
 
+app.post('/api/student-applications/reject', (req, res) => {
+  try {
+    const { appId } = req.body;
+    const idx = studentApplications.findIndex((a: any) => a.id === appId);
+    if (idx !== -1) {
+      studentApplications[idx] = {
+        ...studentApplications[idx],
+        status: 'rejected',
+      };
+      saveStudentApps();
+    }
+    res.json({ success: true, applications: studentApplications });
+  } catch (err) {
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
 app.post('/api/student-applications/archive', (req, res) => {
   try {
     const { appId } = req.body;

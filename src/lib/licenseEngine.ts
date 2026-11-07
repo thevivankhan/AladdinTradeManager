@@ -310,17 +310,26 @@ export const approveStudentApplication = (
   return { app: apps[idx], license: newLic };
 };
 
-export const rejectStudentApplication = (appId: string): boolean => {
+export const rejectStudentApplication = async (appId: string): Promise<boolean> => {
   const apps = getStudentApplications();
   const idx = apps.findIndex((a) => a.id === appId);
   if (idx === -1) return false;
 
   apps[idx] = { ...apps[idx], status: 'rejected' };
   saveStudentApplications(apps);
+
+  try {
+    await fetch('/api/student-applications/reject', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ appId }),
+    });
+  } catch {}
+
   return true;
 };
 
-export const archiveStudentApplication = (appId: string): boolean => {
+export const archiveStudentApplication = async (appId: string): Promise<boolean> => {
   const apps = getStudentApplications();
   const idx = apps.findIndex((a) => a.id === appId);
   if (idx === -1) return false;
@@ -332,16 +341,18 @@ export const archiveStudentApplication = (appId: string): boolean => {
   };
   saveStudentApplications(apps);
 
-  fetch('/api/student-applications/archive', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ appId }),
-  }).catch(() => {});
+  try {
+    await fetch('/api/student-applications/archive', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ appId }),
+    });
+  } catch {}
 
   return true;
 };
 
-export const restoreStudentApplication = (appId: string): boolean => {
+export const restoreStudentApplication = async (appId: string): Promise<boolean> => {
   const apps = getStudentApplications();
   const idx = apps.findIndex((a) => a.id === appId);
   if (idx === -1) return false;
@@ -353,23 +364,27 @@ export const restoreStudentApplication = (appId: string): boolean => {
   };
   saveStudentApplications(apps);
 
-  fetch('/api/student-applications/restore', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ appId }),
-  }).catch(() => {});
+  try {
+    await fetch('/api/student-applications/restore', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ appId }),
+    });
+  } catch {}
 
   return true;
 };
 
-export const deleteStudentApplicationPermanently = (appId: string): boolean => {
+export const deleteStudentApplicationPermanently = async (appId: string): Promise<boolean> => {
   const apps = getStudentApplications();
   const filtered = apps.filter((a) => a.id !== appId);
   saveStudentApplications(filtered);
 
-  fetch(`/api/student-applications/${appId}`, {
-    method: 'DELETE',
-  }).catch(() => {});
+  try {
+    await fetch(`/api/student-applications/${appId}`, {
+      method: 'DELETE',
+    });
+  } catch {}
 
   return true;
 };

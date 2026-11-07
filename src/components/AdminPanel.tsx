@@ -136,6 +136,30 @@ export const AdminPanel = ({
       });
   };
 
+  const handleArchiveStudent = async (appId: string) => {
+    setStudentApps(prev => prev.map(a => a.id === appId ? { ...a, isArchived: true, archivedAt: Date.now() } : a));
+    await archiveStudentApplication(appId);
+    refreshStudentApps(false);
+  };
+
+  const handleRejectStudent = async (appId: string) => {
+    setStudentApps(prev => prev.map(a => a.id === appId ? { ...a, status: 'rejected' } : a));
+    await rejectStudentApplication(appId);
+    refreshStudentApps(false);
+  };
+
+  const handleRestoreStudent = async (appId: string) => {
+    setStudentApps(prev => prev.map(a => a.id === appId ? { ...a, isArchived: false, archivedAt: undefined } : a));
+    await restoreStudentApplication(appId);
+    refreshStudentApps(false);
+  };
+
+  const handleDeleteForeverStudent = async (appId: string) => {
+    setStudentApps(prev => prev.filter(a => a.id !== appId));
+    await deleteStudentApplicationPermanently(appId);
+    refreshStudentApps(false);
+  };
+
   useEffect(() => {
     setVaultLicenses(getIssuedLicenses());
     refreshStudentApps(false);
@@ -1600,11 +1624,8 @@ export const AdminPanel = ({
                               {isArchived ? (
                                 <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
                                   <button
-                                    onClick={() => {
-                                      restoreStudentApplication(app.id);
-                                      refreshStudentApps(false);
-                                    }}
-                                    className="bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 font-bold text-xs px-2.5 py-1.5 rounded-lg border border-cyan-500/30 transition-all flex items-center gap-1 cursor-pointer"
+                                    onClick={() => handleRestoreStudent(app.id)}
+                                    className="bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 font-bold text-xs px-2.5 py-1.5 rounded-lg border border-cyan-500/30 transition-all flex items-center gap-1 cursor-pointer active:scale-95"
                                     title="Restore back to Active Queue"
                                   >
                                     <RotateCcw className="w-3.5 h-3.5 text-cyan-400" />
@@ -1612,13 +1633,8 @@ export const AdminPanel = ({
                                   </button>
 
                                   <button
-                                    onClick={() => {
-                                      if (confirm(`Permanently erase ${app.name}'s past record forever? This cannot be undone.`)) {
-                                        deleteStudentApplicationPermanently(app.id);
-                                        refreshStudentApps(false);
-                                      }
-                                    }}
-                                    className="px-2.5 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30 transition-all flex items-center gap-1 text-xs font-bold cursor-pointer"
+                                    onClick={() => handleDeleteForeverStudent(app.id)}
+                                    className="px-2.5 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30 transition-all flex items-center gap-1 text-xs font-bold cursor-pointer active:scale-95"
                                     title="Permanently Delete Forever"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
@@ -1663,13 +1679,8 @@ export const AdminPanel = ({
                                     </button>
 
                                     <button
-                                      onClick={() => {
-                                        if (confirm(`Reject registration for ${app.name}?`)) {
-                                          rejectStudentApplication(app.id);
-                                          refreshStudentApps(false);
-                                        }
-                                      }}
-                                      className="px-2.5 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30 transition-all flex items-center gap-1 text-xs font-bold cursor-pointer"
+                                      onClick={() => handleRejectStudent(app.id)}
+                                      className="px-2.5 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30 transition-all flex items-center gap-1 text-xs font-bold cursor-pointer active:scale-95"
                                       title="Reject Registration"
                                     >
                                       <X className="w-3.5 h-3.5" />
@@ -1677,13 +1688,8 @@ export const AdminPanel = ({
                                     </button>
 
                                     <button
-                                      onClick={() => {
-                                        if (confirm(`Move ${app.name}'s registration to Past Students Archive / Trash? The record will remain 100% safe in your Past Records.`)) {
-                                          archiveStudentApplication(app.id);
-                                          refreshStudentApps(false);
-                                        }
-                                      }}
-                                      className="px-2.5 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 transition-all flex items-center gap-1 text-xs font-bold cursor-pointer"
+                                      onClick={() => handleArchiveStudent(app.id)}
+                                      className="px-2.5 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 transition-all flex items-center gap-1 text-xs font-bold cursor-pointer active:scale-95"
                                       title="Move to Past Records / Trash (डेटा सुरक्षित रहेगा)"
                                     >
                                       <Archive className="w-3.5 h-3.5" />
@@ -1708,7 +1714,7 @@ export const AdminPanel = ({
                                           setTimeout(() => setCopiedKeyId(null), 2000);
                                         }
                                       }}
-                                      className="bg-slate-900 hover:bg-slate-800 text-cyan-300 font-bold text-xs px-3 py-1.5 rounded-lg border border-cyan-500/30 transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+                                      className="bg-slate-900 hover:bg-slate-800 text-cyan-300 font-bold text-xs px-3 py-1.5 rounded-lg border border-cyan-500/30 transition-all flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
                                     >
                                       {copiedKeyId === app.id ? (
                                         <>
@@ -1725,13 +1731,8 @@ export const AdminPanel = ({
                                   )}
 
                                   <button
-                                    onClick={() => {
-                                      if (confirm(`Move ${app.name}'s registration to Past Students Archive / Trash? The record will remain 100% safe in your Past Records.`)) {
-                                        archiveStudentApplication(app.id);
-                                        refreshStudentApps(false);
-                                      }
-                                    }}
-                                    className="px-2.5 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 transition-all flex items-center gap-1 text-xs font-bold cursor-pointer"
+                                    onClick={() => handleArchiveStudent(app.id)}
+                                    className="px-2.5 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 transition-all flex items-center gap-1 text-xs font-bold cursor-pointer active:scale-95"
                                     title="Move to Past Records / Trash (डेटा सुरक्षित रहेगा)"
                                   >
                                     <Archive className="w-3.5 h-3.5" />
