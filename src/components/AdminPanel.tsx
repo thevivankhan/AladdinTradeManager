@@ -1433,35 +1433,37 @@ export const AdminPanel = ({
                 </div>
 
                 {/* Sub Filter Navigation: Active vs Safe Archive / Trash */}
-                <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
-                  <button
-                    onClick={() => setAppSubFilter("active")}
-                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-                      appSubFilter === "active"
-                        ? "bg-cyan-400 text-slate-950 font-black shadow-lg shadow-cyan-500/20"
-                        : "bg-slate-950 text-slate-400 hover:text-white border border-slate-800 hover:bg-slate-900"
-                    }`}
-                  >
-                    <Clock className="w-3.5 h-3.5" />
-                    <span>Active Registrations ({activeApps.length})</span>
-                    {pendingActiveCount > 0 && (
-                      <span className="bg-rose-500 text-white text-[9px] px-1.5 py-0.2 rounded-full font-bold ml-1 animate-pulse">
-                        {pendingActiveCount} New
-                      </span>
-                    )}
-                  </button>
+                <div className="flex items-center gap-2">
+                  <div className="inline-flex p-1 bg-slate-950/90 border border-slate-800 rounded-xl gap-1">
+                    <button
+                      onClick={() => setAppSubFilter("active")}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                        appSubFilter === "active"
+                          ? "bg-cyan-400 text-slate-950 font-black shadow-sm"
+                          : "text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      <Clock className="w-3.5 h-3.5" />
+                      <span>Active Queue ({activeApps.length})</span>
+                      {pendingActiveCount > 0 && (
+                        <span className="bg-rose-500 text-white text-[9px] px-1.5 py-0.2 rounded-full font-bold ml-0.5 animate-pulse">
+                          {pendingActiveCount} New
+                        </span>
+                      )}
+                    </button>
 
-                  <button
-                    onClick={() => setAppSubFilter("trash")}
-                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-                      appSubFilter === "trash"
-                        ? "bg-amber-400 text-slate-950 font-black shadow-lg shadow-amber-500/20"
-                        : "bg-slate-950 text-slate-400 hover:text-amber-300 border border-slate-800 hover:bg-slate-900"
-                    }`}
-                  >
-                    <Archive className="w-3.5 h-3.5" />
-                    <span>Past Records / Trash ({trashApps.length})</span>
-                  </button>
+                    <button
+                      onClick={() => setAppSubFilter("trash")}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                        appSubFilter === "trash"
+                          ? "bg-amber-400 text-slate-950 font-black shadow-sm"
+                          : "text-slate-400 hover:text-amber-300"
+                      }`}
+                    >
+                      <Archive className="w-3.5 h-3.5" />
+                      <span>Past Records / Trash ({trashApps.length})</span>
+                    </button>
+                  </div>
                 </div>
 
                 {/* Applications List */}
@@ -1510,7 +1512,7 @@ export const AdminPanel = ({
                         return (
                           <div
                             key={app.id}
-                            className={`p-4 rounded-xl border transition-all ${
+                            className={`p-3.5 sm:p-4 rounded-xl border transition-all ${
                               isArchived
                                 ? "bg-slate-950/60 border-slate-800 opacity-80 hover:opacity-100"
                                 : isPending
@@ -1520,180 +1522,149 @@ export const AdminPanel = ({
                                 : "bg-slate-950/40 border-slate-800 opacity-60"
                             }`}
                           >
-                            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-                              {/* Applicant Info */}
-                              <div className="space-y-1">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="font-bold text-white text-sm">
-                                    {app.name}
+                            {/* Top Details */}
+                            <div className="space-y-1.5">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-bold text-white text-sm">
+                                  {app.name}
+                                </span>
+                                {isArchived ? (
+                                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                                    ARCHIVED RECORD
                                   </span>
-                                  {isArchived ? (
-                                    <span className="text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider bg-amber-400/20 text-amber-300 border border-amber-400/30">
-                                      ARCHIVED RECORD
-                                    </span>
-                                  ) : (
-                                    <span
-                                      className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                                        isPending
-                                          ? "bg-amber-400/20 text-amber-300 border border-amber-400/30 animate-pulse"
-                                          : isApproved
-                                          ? "bg-emerald-400/20 text-emerald-300 border border-emerald-400/30"
-                                          : "bg-rose-400/20 text-rose-300 border border-rose-400/30"
-                                      }`}
-                                    >
-                                      {app.status}
-                                    </span>
-                                  )}
-                                  <span className="text-[10px] text-slate-500 font-mono">
-                                    Submitted: {new Date(app.submittedAt).toLocaleString()}
+                                ) : (
+                                  <span
+                                    className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                                      isPending
+                                        ? "bg-amber-400/20 text-amber-300 border border-amber-400/30 animate-pulse"
+                                        : isApproved
+                                        ? "bg-emerald-400/20 text-emerald-300 border border-emerald-400/30"
+                                        : "bg-rose-400/20 text-rose-300 border border-rose-400/30"
+                                    }`}
+                                  >
+                                    {app.status}
                                   </span>
-                                  {app.archivedAt && (
-                                    <span className="text-[10px] text-amber-500/80 font-mono">
-                                      • Archived: {new Date(app.archivedAt).toLocaleTimeString()}
-                                    </span>
-                                  )}
-                                </div>
-
-                                <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400 pt-0.5">
-                                  {app.email && (
-                                    <span className="flex items-center gap-1 text-slate-300">
-                                      ✉️ Email: <strong className="text-white font-mono">{app.email}</strong>
-                                    </span>
-                                  )}
-                                  <span className="flex items-center gap-1 text-slate-300">
-                                    📱 Phone: <strong className="text-white font-mono">{app.contact}</strong>
+                                )}
+                                <span className="text-[10px] text-slate-500 font-mono">
+                                  Submitted: {new Date(app.submittedAt).toLocaleString()}
+                                </span>
+                                {app.archivedAt && (
+                                  <span className="text-[10px] text-amber-500/80 font-mono">
+                                    • Archived: {new Date(app.archivedAt).toLocaleTimeString()}
                                   </span>
-                                  <span className="flex items-center gap-1 text-cyan-300">
-                                    🆔 Pocket Option UID: <strong className="text-cyan-200 font-mono">{app.traderId || "None (Direct Member)"}</strong>
-                                  </span>
-                                  <span className="flex items-center gap-1 text-slate-300 text-xs">
-                                    💻 Device: <strong className="text-cyan-300 font-semibold">{app.deviceName || app.deviceId}</strong>
-                                  </span>
-                                </div>
-
-                                {app.issuedKey && (
-                                  <div className="mt-2 flex items-center gap-2 p-2 rounded-lg bg-emerald-950/40 border border-emerald-500/30 text-xs">
-                                    <Key className="w-3.5 h-3.5 text-emerald-400" />
-                                    <span className="text-slate-300">Issued Key:</span>
-                                    <strong className="text-emerald-300 font-mono text-sm tracking-wider">
-                                      {app.issuedKey}
-                                    </strong>
-                                    <span className="text-[10px] text-slate-400 font-medium">({app.plan || "1 Month ($47)"})</span>
-                                  </div>
                                 )}
                               </div>
 
-                              {/* Actions */}
-                              <div className="flex items-center gap-2 shrink-0">
-                                {isArchived ? (
-                                  <>
+                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-400 pt-0.5">
+                                {app.email && (
+                                  <span className="flex items-center gap-1 text-slate-300">
+                                    ✉️ Email: <strong className="text-white font-mono">{app.email}</strong>
+                                  </span>
+                                )}
+                                <span className="flex items-center gap-1 text-slate-300">
+                                  📱 Phone: <strong className="text-white font-mono">{app.contact}</strong>
+                                </span>
+                                <span className="flex items-center gap-1 text-cyan-300">
+                                  🆔 Pocket Option UID: <strong className="text-cyan-200 font-mono">{app.traderId || "None (Direct Member)"}</strong>
+                                </span>
+                                <span className="flex items-center gap-1 text-slate-300 text-xs">
+                                  💻 Device: <strong className="text-cyan-300 font-semibold">{app.deviceName || app.deviceId}</strong>
+                                </span>
+                              </div>
+
+                              {app.issuedKey && (
+                                <div className="mt-2 flex items-center gap-2 p-2 rounded-lg bg-emerald-950/40 border border-emerald-500/30 text-xs w-fit">
+                                  <Key className="w-3.5 h-3.5 text-emerald-400" />
+                                  <span className="text-slate-300">Issued Key:</span>
+                                  <strong className="text-emerald-300 font-mono text-xs tracking-wider">
+                                    {app.issuedKey}
+                                  </strong>
+                                  <span className="text-[10px] text-slate-400 font-medium">({app.plan || "1 Month ($47)"})</span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Clean Dedicated Action Toolbar */}
+                            <div className="mt-3 pt-2.5 border-t border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                              {isArchived ? (
+                                <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
+                                  <button
+                                    onClick={() => {
+                                      restoreStudentApplication(app.id);
+                                      refreshStudentApps(false);
+                                    }}
+                                    className="bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 font-bold text-xs px-2.5 py-1.5 rounded-lg border border-cyan-500/30 transition-all flex items-center gap-1 cursor-pointer"
+                                    title="Restore back to Active Queue"
+                                  >
+                                    <RotateCcw className="w-3.5 h-3.5 text-cyan-400" />
+                                    <span>Restore to Active</span>
+                                  </button>
+
+                                  <button
+                                    onClick={() => {
+                                      if (confirm(`Permanently erase ${app.name}'s past record forever? This cannot be undone.`)) {
+                                        deleteStudentApplicationPermanently(app.id);
+                                        refreshStudentApps(false);
+                                      }
+                                    }}
+                                    className="px-2.5 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30 transition-all flex items-center gap-1 text-xs font-bold cursor-pointer"
+                                    title="Permanently Delete Forever"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                    <span>Delete Forever</span>
+                                  </button>
+                                </div>
+                              ) : isPending ? (
+                                <>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Plan:</span>
+                                    <select
+                                      id={`plan-${app.id}`}
+                                      defaultValue="1 Month ($47)"
+                                      className="bg-slate-950 border border-slate-700/80 text-white text-xs px-2.5 py-1.5 rounded-lg focus:outline-none focus:border-cyan-500 cursor-pointer"
+                                    >
+                                      <option value="1 Month ($47)">1 Month ($47)</option>
+                                      <option value="3 Months ($97)">3 Months ($97)</option>
+                                      <option value="6 Months ($147)">6 Months ($147)</option>
+                                      <option value="1 Year ($197)">1 Year ($197)</option>
+                                      <option value="Lifetime VIP ($247)">Lifetime VIP ($247)</option>
+                                    </select>
+                                  </div>
+
+                                  <div className="flex items-center gap-1.5 flex-wrap">
                                     <button
                                       onClick={() => {
-                                        restoreStudentApplication(app.id);
-                                        refreshStudentApps(false);
+                                        const select = document.getElementById(`plan-${app.id}`) as HTMLSelectElement;
+                                        const chosenPlan = (select?.value || "1 Month ($47)") as LicenseKey['plan'];
+                                        const result = approveStudentApplication(app.id, chosenPlan);
+                                        if (result) {
+                                          refreshStudentApps(false);
+                                          setVaultLicenses(getIssuedLicenses());
+                                          const text = generateVipPassText(result.license);
+                                          navigator.clipboard.writeText(text);
+                                          alert(`✅ Approved!\nIssued Key: ${result.license.key}\nVIP Access Pass copied to clipboard for Telegram!`);
+                                        }
                                       }}
-                                      className="bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 font-bold text-xs px-3 py-1.5 rounded-lg border border-cyan-500/30 transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
-                                      title="Restore back to Active Queue"
+                                      className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 shadow-md shadow-emerald-500/20 cursor-pointer active:scale-95"
                                     >
-                                      <RotateCcw className="w-3.5 h-3.5 text-cyan-400" />
-                                      <span>Restore to Active</span>
+                                      <Check className="w-3.5 h-3.5 stroke-[3]" />
+                                      <span>Approve & Issue Key</span>
                                     </button>
 
                                     <button
                                       onClick={() => {
-                                        if (confirm(`Permanently erase ${app.name}'s past record forever? This cannot be undone.`)) {
-                                          deleteStudentApplicationPermanently(app.id);
+                                        if (confirm(`Reject registration for ${app.name}?`)) {
+                                          rejectStudentApplication(app.id);
                                           refreshStudentApps(false);
                                         }
                                       }}
-                                      className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-950/60 text-slate-400 hover:text-rose-400 border border-slate-700 transition-colors cursor-pointer"
-                                      title="Permanently Delete Forever"
+                                      className="px-2.5 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30 transition-all flex items-center gap-1 text-xs font-bold cursor-pointer"
+                                      title="Reject Registration"
                                     >
-                                      <Trash2 className="w-4 h-4" />
+                                      <X className="w-3.5 h-3.5" />
+                                      <span>Reject</span>
                                     </button>
-                                  </>
-                                ) : (
-                                  <>
-                                    {isPending && (
-                                      <>
-                                        <select
-                                          id={`plan-${app.id}`}
-                                          defaultValue="1 Month ($47)"
-                                          className="bg-slate-950 border border-slate-700 text-white text-xs px-2.5 py-1.5 rounded-lg focus:outline-none focus:border-cyan-500"
-                                        >
-                                          <option value="1 Month ($47)">1 Month ($47)</option>
-                                          <option value="3 Months ($97)">3 Months ($97)</option>
-                                          <option value="6 Months ($147)">6 Months ($147)</option>
-                                          <option value="1 Year ($197)">1 Year ($197)</option>
-                                          <option value="Lifetime VIP ($247)">Lifetime VIP ($247)</option>
-                                        </select>
 
-                                        <button
-                                          onClick={() => {
-                                            const select = document.getElementById(`plan-${app.id}`) as HTMLSelectElement;
-                                            const chosenPlan = (select?.value || "1 Month ($47)") as LicenseKey['plan'];
-                                            const result = approveStudentApplication(app.id, chosenPlan);
-                                            if (result) {
-                                              refreshStudentApps(false);
-                                              setVaultLicenses(getIssuedLicenses());
-                                              const text = generateVipPassText(result.license);
-                                              navigator.clipboard.writeText(text);
-                                              alert(`✅ Approved!\nIssued Key: ${result.license.key}\nVIP Access Pass copied to clipboard for Telegram!`);
-                                            }
-                                          }}
-                                          className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 shadow-md shadow-emerald-500/20 cursor-pointer"
-                                        >
-                                          <Check className="w-3.5 h-3.5" />
-                                          <span>Approve & Issue ATM-Key</span>
-                                        </button>
-
-                                        <button
-                                          onClick={() => {
-                                            if (confirm(`Reject registration for ${app.name}?`)) {
-                                              rejectStudentApplication(app.id);
-                                              refreshStudentApps(false);
-                                            }
-                                          }}
-                                          className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-900/40 text-slate-400 hover:text-rose-400 transition-colors cursor-pointer"
-                                          title="Reject"
-                                        >
-                                          <X className="w-4 h-4" />
-                                        </button>
-                                      </>
-                                    )}
-
-                                    {isApproved && app.issuedKey && (
-                                      <button
-                                        onClick={() => {
-                                          const matchingLic = vaultLicenses.find(l => l.key === app.issuedKey || l.cleanKey === app.issuedKey);
-                                          if (matchingLic) {
-                                            const passText = generateVipPassText(matchingLic);
-                                            navigator.clipboard.writeText(passText);
-                                            setCopiedKeyId(app.id);
-                                            setTimeout(() => setCopiedKeyId(null), 2000);
-                                          } else {
-                                            navigator.clipboard.writeText(app.issuedKey || '');
-                                            setCopiedKeyId(app.id);
-                                            setTimeout(() => setCopiedKeyId(null), 2000);
-                                          }
-                                        }}
-                                        className="bg-slate-800 hover:bg-slate-700 text-cyan-300 font-bold text-xs px-3 py-1.5 rounded-lg border border-cyan-500/30 transition-all flex items-center gap-1.5 cursor-pointer"
-                                      >
-                                        {copiedKeyId === app.id ? (
-                                          <>
-                                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                                            <span>Copied VIP Pass!</span>
-                                          </>
-                                        ) : (
-                                          <>
-                                            <Copy className="w-3.5 h-3.5" />
-                                            <span>Copy Telegram Pass</span>
-                                          </>
-                                        )}
-                                      </button>
-                                    )}
-
-                                    {/* Safe Archive / Trash Button */}
                                     <button
                                       onClick={() => {
                                         if (confirm(`Move ${app.name}'s registration to Past Students Archive / Trash? The record will remain 100% safe in your Past Records.`)) {
@@ -1701,14 +1672,62 @@ export const AdminPanel = ({
                                           refreshStudentApps(false);
                                         }
                                       }}
-                                      className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-amber-950/50 text-slate-400 hover:text-amber-300 border border-slate-700/60 transition-colors cursor-pointer"
+                                      className="px-2.5 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 transition-all flex items-center gap-1 text-xs font-bold cursor-pointer"
                                       title="Move to Past Records / Trash (डेटा सुरक्षित रहेगा)"
                                     >
-                                      <Archive className="w-4 h-4" />
+                                      <Archive className="w-3.5 h-3.5" />
+                                      <span>Archive</span>
                                     </button>
-                                  </>
-                                )}
-                              </div>
+                                  </div>
+                                </>
+                              ) : (
+                                <div className="flex items-center justify-between sm:justify-end gap-2 w-full">
+                                  {isApproved && app.issuedKey && (
+                                    <button
+                                      onClick={() => {
+                                        const matchingLic = vaultLicenses.find(l => l.key === app.issuedKey || l.cleanKey === app.issuedKey);
+                                        if (matchingLic) {
+                                          const passText = generateVipPassText(matchingLic);
+                                          navigator.clipboard.writeText(passText);
+                                          setCopiedKeyId(app.id);
+                                          setTimeout(() => setCopiedKeyId(null), 2000);
+                                        } else {
+                                          navigator.clipboard.writeText(app.issuedKey || '');
+                                          setCopiedKeyId(app.id);
+                                          setTimeout(() => setCopiedKeyId(null), 2000);
+                                        }
+                                      }}
+                                      className="bg-slate-900 hover:bg-slate-800 text-cyan-300 font-bold text-xs px-3 py-1.5 rounded-lg border border-cyan-500/30 transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+                                    >
+                                      {copiedKeyId === app.id ? (
+                                        <>
+                                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                                          <span>Copied VIP Pass!</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Copy className="w-3.5 h-3.5" />
+                                          <span>Copy Telegram Pass</span>
+                                        </>
+                                      )}
+                                    </button>
+                                  )}
+
+                                  <button
+                                    onClick={() => {
+                                      if (confirm(`Move ${app.name}'s registration to Past Students Archive / Trash? The record will remain 100% safe in your Past Records.`)) {
+                                        archiveStudentApplication(app.id);
+                                        refreshStudentApps(false);
+                                      }
+                                    }}
+                                    className="px-2.5 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 transition-all flex items-center gap-1 text-xs font-bold cursor-pointer"
+                                    title="Move to Past Records / Trash (डेटा सुरक्षित रहेगा)"
+                                  >
+                                    <Archive className="w-3.5 h-3.5" />
+                                    <span>Archive</span>
+                                  </button>
+                                </div>
+                              )}
                             </div>
                           </div>
                         );
