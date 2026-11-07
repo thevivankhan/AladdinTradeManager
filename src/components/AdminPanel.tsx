@@ -106,8 +106,11 @@ export const AdminPanel = ({
   const [verifiedTraderIds, setVerifiedTraderIds] = useState<string[]>([]);
   const [newTraderIdInput, setNewTraderIdInput] = useState("");
   const [isUpdatingTraderIds, setIsUpdatingTraderIds] = useState(false);
+  const [isRefreshingApps, setIsRefreshingApps] = useState(false);
 
   const refreshStudentApps = (triggerSound = false) => {
+    setIsRefreshingApps(true);
+    setTimeout(() => setIsRefreshingApps(false), 700);
     fetch('/api/student-applications')
       .then(res => res.json())
       .then(data => {
@@ -1196,13 +1199,17 @@ export const AdminPanel = ({
               <p className="text-2xl font-black text-white">{totalDevicesCount}</p>
             </div>
           </div>
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center gap-4">
-            <div className="w-12 h-12 bg-amber-500/10 rounded-full flex items-center justify-center">
-              <Clock className="w-6 h-6 text-amber-500" />
+          <div 
+            onClick={() => { setActiveTab("studentApps"); setAppSubFilter("active"); refreshStudentApps(false); }}
+            className="bg-slate-900 border border-slate-800 hover:border-cyan-500/50 cursor-pointer rounded-xl p-4 flex items-center gap-4 transition-all hover:bg-slate-800/60 active:scale-95 group"
+            title="Click to review pending student applications"
+          >
+            <div className="w-12 h-12 bg-amber-500/10 group-hover:bg-cyan-500/10 rounded-full flex items-center justify-center transition-colors">
+              <Clock className="w-6 h-6 text-amber-500 group-hover:text-cyan-400 transition-colors" />
             </div>
             <div>
-              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Pending Accounts</p>
-              <p className="text-2xl font-black text-white">{pendingAccountsCount}</p>
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-wider group-hover:text-cyan-300 transition-colors">Pending Applications</p>
+              <p className="text-2xl font-black text-white">{studentApps.filter(a => a.status === 'pending' && !a.isArchived).length}</p>
             </div>
           </div>
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center gap-4">
@@ -1415,19 +1422,23 @@ export const AdminPanel = ({
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-2 bg-slate-950/80 border border-slate-800 rounded-xl p-3">
+                  <div 
+                    onClick={() => { setAppSubFilter("active"); refreshStudentApps(false); }}
+                    className="flex items-center gap-2 bg-slate-950/80 border border-slate-800 hover:border-cyan-500/40 rounded-xl p-3 cursor-pointer transition-all hover:bg-slate-900/80 active:scale-95 shadow-sm group"
+                    title="Click to review pending requests & refresh"
+                  >
                     <div className="text-right">
-                      <p className="text-[10px] uppercase font-bold text-slate-400">Pending Review</p>
+                      <p className="text-[10px] uppercase font-bold text-slate-400 group-hover:text-cyan-300 transition-colors">Pending Review</p>
                       <p className="text-xl font-black text-cyan-400">
                         {pendingActiveCount} Requests
                       </p>
                     </div>
                     <button
-                      onClick={() => refreshStudentApps(false)}
+                      onClick={(e) => { e.stopPropagation(); setAppSubFilter("active"); refreshStudentApps(false); }}
                       className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all cursor-pointer"
                       title="Refresh List"
                     >
-                      <RefreshCw className="w-4 h-4" />
+                      <RefreshCw className={`w-4 h-4 ${isRefreshingApps ? "animate-spin text-cyan-400" : ""}`} />
                     </button>
                   </div>
                 </div>
