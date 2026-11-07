@@ -203,7 +203,7 @@ html, body, #root {
   }
 }
 
-/* Compact Tawk.to Live Chat Icon - unobtrusive placement on landing page */
+/* Compact Tawk.to Live Chat Icon - 28% smaller & unobtrusive placement */
 #tawk-bubble-container,
 div[id*="tawk-bubble"],
 .tawk-min-container {
@@ -214,20 +214,7 @@ div[id*="tawk-bubble"],
 }
 
 /* Ensure maximized chat box remains normal readable size */
-div[id*="tawk-chat-container"] {
+div[id*="tawk-chat-container"],
+iframe[title*="chat widget" i] {
   transform: none !important;
-}
-
-/* Hide floating Tawk bubble only when explicitly tagged */
-body.hide-tawk-floating #tawk-bubble-container,
-body.hide-tawk-floating div[id*="tawk-bubble"],
-body.hide-tawk-floating .tawk-min-container,
-body.hide-tawk-floating div[class*="tawk"],
-body.hide-tawk-floating iframe[title*="chat" i],
-body.hide-tawk-floating iframe[src*="tawk.to" i],
-body.hide-tawk-floating div[id*="tawk"] {
-  display: none !important;
-  visibility: hidden !important;
-  opacity: 0 !important;
-  pointer-events: none !important;
 }

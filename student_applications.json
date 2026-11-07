@@ -1,12 +1,24 @@
 [
   {
-    "id": "app-1794008385701-4ibq",
-    "name": "ololo Social",
-    "email": "ololosocial@gmail.com",
-    "contact": "",
-    "deviceId": "dev_xq0nqlqmw5l12dd",
-    "deviceName": "Android 10 (Chrome Mobile)",
-    "submittedAt": 1794008385701,
+    "id": "app-1794047426468-qc89",
+    "name": "Test Student",
+    "email": "teststudent@example.com",
+    "contact": "teststudent@example.com",
+    "traderId": "12345678",
+    "deviceId": "device_1794047426468",
+    "deviceName": "Device",
+    "submittedAt": 1794047426468,
+    "status": "pending",
+    "isNew": true
+  },
+  {
+    "id": "app-1793967024609-8y3h",
+    "name": "Raul",
+    "contact": "6390805060",
+    "traderId": "67890987",
+    "deviceId": "dev_jacn30zmw4xjuf5",
+    "deviceName": "Mobile Device",
+    "submittedAt": 1793967024609,
     "status": "pending"
   }
 ]

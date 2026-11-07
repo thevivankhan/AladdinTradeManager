@@ -6,28 +6,12 @@ import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, writeBatch, limit, setDoc } from 'firebase/firestore';
 import fs from 'fs';
 
-import crypto from 'crypto';
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// --- Atomic Safe JSON File Persistence ---
-function safeWriteJson(filePath: string, data: any) {
-  try {
-    const tmpPath = `${filePath}.tmp.${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-    fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2), 'utf8');
-    fs.renameSync(tmpPath, filePath);
-  } catch (e) {
-    console.error(`Safe write failed for ${filePath}:`, e);
-    try {
-      fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
-    } catch {}
-  }
-}
-
 const firebaseConfig = JSON.parse(fs.readFileSync(path.join(__dirname, 'firebase-applet-config.json'), 'utf8'));
 
-// Initialize Firebase for database proxy if needed
+// Initialize Firebase with the auto-generated config
 const firebaseApp = initializeApp(firebaseConfig);
 const db = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
 
@@ -39,59 +23,16 @@ app.use(express.json({ limit: '50mb' }));
 // --- Mock DB fallback for local logic ---
 const dbPath = path.join(__dirname, 'database.json');
 if (!fs.existsSync(dbPath)) {
-  safeWriteJson(dbPath, { users: [], payments: [], signals: [], bias: [] });
+  fs.writeFileSync(dbPath, JSON.stringify({ users: [], payments: [], signals: [], bias: [] }));
 }
 
-let memDB = { users: [], payments: [], signals: [], bias: [] };
-try {
-  memDB = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
-} catch {
-  memDB = { users: [], payments: [], signals: [], bias: [] };
-}
+let memDB = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
 
 function saveDb() {
-  safeWriteJson(dbPath, memDB);
+  fs.writeFileSync(dbPath, JSON.stringify(memDB, null, 2));
 }
 
-// --- Proprietary Cryptographic Session Engine (Zero External Dependencies) ---
-const SESSION_SECRET = process.env.SESSION_SECRET || 'aladdin_atm_vault_proprietary_salt_2026';
-
-export const MASTER_ADMIN_EMAILS = [
-  'thevivankhan@gmail.com',
-  'ololootc@gmail.com',
-  'thealphafxpro@gmail.com',
-  'ololouniversity@gmail.com'
-];
-
-function signSessionToken(payload: Record<string, any>): string {
-  const data = Buffer.from(JSON.stringify(payload)).toString('base64url');
-  const hmac = crypto.createHmac('sha256', SESSION_SECRET).update(data).digest('base64url');
-  return `${data}.${hmac}`;
-}
-
-function verifySessionToken(token: string): { valid: boolean; payload?: any; reason?: string } {
-  if (!token || typeof token !== 'string' || !token.includes('.')) {
-    return { valid: false, reason: 'Invalid token format' };
-  }
-  const parts = token.split('.');
-  if (parts.length !== 2) return { valid: false, reason: 'Malformed token' };
-  const [data, sig] = parts;
-  const expectedSig = crypto.createHmac('sha256', SESSION_SECRET).update(data).digest('base64url');
-  if (sig !== expectedSig) {
-    return { valid: false, reason: 'Tampered signature detected' };
-  }
-  try {
-    const payload = JSON.parse(Buffer.from(data, 'base64url').toString('utf8'));
-    if (payload.exp && Date.now() > payload.exp) {
-      return { valid: false, reason: 'Session expired' };
-    }
-    return { valid: true, payload };
-  } catch {
-    return { valid: false, reason: 'Unreadable token payload' };
-  }
-}
-
-// --- REST to Database Proxy ---
+// --- REST to Firebase Proxy ---
 app.get('/api/mock-db', (req, res) => {
   res.json(memDB);
 });
@@ -116,220 +57,70 @@ let licensesData: {
 } = {
   masterPassword: 'admin',
   licenses: [],
-  verifiedTraderIds: ['143702223', '98231011'],
+  verifiedTraderIds: ['77554333', '143702223', '8849102', '9923184', '5521948'],
 };
 
 try {
   if (fs.existsSync(licensesPath)) {
     const raw = JSON.parse(fs.readFileSync(licensesPath, 'utf8'));
-    const sanitizedLicenses = (Array.isArray(raw.licenses) ? raw.licenses : []).filter(
-      (l: any) => l.cleanKey !== 'C3XU78M' && l.cleanKey !== '9B2X74M' && !l.id?.startsWith('lic-demo-')
-    );
     licensesData = {
       masterPassword: raw.masterPassword || 'admin',
-      licenses: sanitizedLicenses,
-      verifiedTraderIds: Array.isArray(raw.verifiedTraderIds)
+      licenses: Array.isArray(raw.licenses) ? raw.licenses : (Array.isArray(raw.students) ? raw.students : []),
+      verifiedTraderIds: Array.isArray(raw.verifiedTraderIds) && raw.verifiedTraderIds.length > 0
         ? raw.verifiedTraderIds
-        : licensesData.verifiedTraderIds,
+        : ['77554333', '143702223', '8849102', '9923184', '5521948'],
     };
-    safeWriteJson(licensesPath, licensesData);
-  } else {
-    safeWriteJson(licensesPath, licensesData);
   }
 } catch (e) {
   console.error('Error loading licenses', e);
 }
 
-function saveLicenses() {
-  safeWriteJson(licensesPath, licensesData);
+// Ensure initial demo keys are seeded so server is never empty
+if (!licensesData.licenses || licensesData.licenses.length === 0) {
+  licensesData.licenses = [
+    {
+      id: 'lic-demo-1',
+      key: 'ATM-C3XU78M',
+      cleanKey: 'C3XU78M',
+      traderName: 'Saify Khan (VIP)',
+      traderPhone: '+91 98765 43210',
+      plan: 'Lifetime VIP ($297)',
+      issuedAt: Date.now() - 5 * 24 * 60 * 60 * 1000,
+      expiresAt: null,
+      status: 'active',
+      notes: 'Master VIP Member',
+    },
+    {
+      id: 'lic-demo-2',
+      key: 'ATM-9B2X74M',
+      cleanKey: '9B2X74M',
+      traderName: 'Rahul Trader',
+      traderPhone: '+91 91234 56789',
+      plan: '1 Month ($47)',
+      issuedAt: Date.now() - 2 * 24 * 60 * 60 * 1000,
+      expiresAt: Date.now() + 28 * 24 * 60 * 60 * 1000,
+      status: 'active',
+      notes: 'Monthly Growth Pass',
+    },
+  ];
+  saveLicenses();
 }
 
-// --- Proprietary Standalone Auth API Routes (Zero Firebase Auth Dependency) ---
-
-// 1. Verify License & Issue Signed Session Token with 1 Code = 1 Device hardware binding
-app.post('/api/auth/verify-license', (req, res) => {
+function saveLicenses() {
   try {
-    const { key, deviceId, deviceName } = req.body;
-    if (!key || typeof key !== 'string') {
-      return res.status(400).json({ success: false, message: 'Please provide an access key.' });
-    }
-
-    const clean = key.toUpperCase().replace(/^ATM[-_\s]?/, '').replace(/[^A-Z0-9]/g, '').slice(0, 7);
-    const normalized = `ATM-${clean}`;
-
-    // Explicitly reject example/demo codes
-    if (['C3XU78M', '9B2X74M', 'XXXXXXX', '1234567', '0000000', 'TESTKEY'].includes(clean)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid Key: Example codes cannot be used. Please enter an active VIP access key issued by Master Admin.'
-      });
-    }
-
-    const licenses = licensesData.licenses || [];
-    const foundIdx = licenses.findIndex(
-      (l: any) => l.cleanKey === clean || l.key === normalized || l.key === key.trim().toUpperCase()
-    );
-
-    if (foundIdx === -1) {
-      return res.status(404).json({
-        success: false,
-        message: 'Invalid 7-digit ATM Key. Please verify or contact Admin for a valid pass.'
-      });
-    }
-
-    const license = licenses[foundIdx];
-
-    if (license.status === 'suspended') {
-      return res.status(403).json({
-        success: false,
-        message: 'This license has been suspended by Desk Admin.'
-      });
-    }
-
-    if (license.expiresAt && Date.now() > license.expiresAt) {
-      return res.status(403).json({
-        success: false,
-        message: `License expired on ${new Date(license.expiresAt).toLocaleDateString()}. Please contact Admin.`
-      });
-    }
-
-    // 1 Code = 1 Device hardware lock
-    const clientDevId = (deviceId || '').trim() || 'dev_unknown';
-    if (!license.boundDeviceId) {
-      license.boundDeviceId = clientDevId;
-      license.boundDeviceName = deviceName || 'Student Device';
-      license.boundAt = Date.now();
-      licenses[foundIdx] = license;
-      saveLicenses();
-    } else if (license.boundDeviceId !== clientDevId) {
-      return res.status(403).json({
-        success: false,
-        message: '🔒 Device Lock: This code is locked to another device (1 Code = 1 Device Only). Contact Admin to reset.'
-      });
-    }
-
-    // Sign Server-Authoritative Cryptographic Session Token
-    const user = {
-      uid: 'lic-' + license.cleanKey,
-      email: license.traderName ? `${license.traderName.replace(/\s+/g, '_').toLowerCase()}@aladdin.org.in` : `trader-${clean}@aladdin.org.in`,
-      name: license.traderName,
-      role: 'user',
-      status: 'active',
-      isLifetimePaid: license.plan?.includes('Lifetime') || false,
-      plan: license.plan,
-      expiresAt: license.expiresAt,
-      deviceId: clientDevId,
-      createdAt: new Date(license.issuedAt || Date.now()).toISOString(),
-    };
-
-    const token = signSessionToken({
-      ...user,
-      exp: license.expiresAt ? license.expiresAt : Date.now() + 365 * 24 * 60 * 60 * 1000
-    });
-
-    res.json({
-      success: true,
-      token,
-      user,
-      license
-    });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+    fs.writeFileSync(licensesPath, JSON.stringify(licensesData, null, 2));
+  } catch (e) {
+    console.error('Error saving licenses', e);
   }
-});
+}
 
-// 2. Master Admin Login with Verified Whitelist Master Email (Passwordless / Email-Auth)
-app.post('/api/auth/admin-login', (req, res) => {
-  try {
-    const { email, password, deviceId } = req.body;
-    if (!email) {
-      return res.status(400).json({ success: false, message: 'Admin email is required.' });
-    }
-
-    const cleanEmail = email.trim().toLowerCase();
-    const isMasterAdmin = MASTER_ADMIN_EMAILS.map(e => e.toLowerCase()).includes(cleanEmail);
-
-    if (!isMasterAdmin) {
-      return res.status(403).json({ success: false, message: 'Access Denied: Only whitelisted Master Admin emails can log in.' });
-    }
-
-    const clientDevId = (deviceId || '').trim() || 'dev_admin';
-    const adminUser = {
-      uid: 'admin-' + cleanEmail,
-      email: cleanEmail,
-      name: 'Master Admin (' + cleanEmail.split('@')[0] + ')',
-      role: 'admin',
-      status: 'active',
-      isLifetimePaid: true,
-      deviceId: clientDevId,
-      createdAt: new Date().toISOString(),
-    };
-
-    const token = signSessionToken({
-      ...adminUser,
-      exp: Date.now() + 30 * 24 * 60 * 60 * 1000 // 30 days session
-    });
-
-    res.json({
-      success: true,
-      token,
-      user: adminUser
-    });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-
-// 3. Verify Server Session Token on App Reload (Prevents DevTools tampering)
-app.post('/api/auth/verify-session', (req, res) => {
-  try {
-    const { token, deviceId } = req.body;
-    if (!token) {
-      return res.status(401).json({ valid: false, message: 'No token provided' });
-    }
-
-    const result = verifySessionToken(token);
-    if (!result.valid || !result.payload) {
-      return res.status(401).json({ valid: false, message: result.reason || 'Invalid session signature' });
-    }
-
-    const payload = result.payload;
-
-    // If student license, verify it is still active and device matches
-    if (payload.role === 'user' && payload.cleanKey) {
-      const licenses = licensesData.licenses || [];
-      const lic = licenses.find((l: any) => l.cleanKey === payload.cleanKey);
-      if (!lic) {
-        return res.status(404).json({ valid: false, message: 'License no longer exists' });
-      }
-      if (lic.status === 'suspended') {
-        return res.status(403).json({ valid: false, message: 'License suspended by Admin' });
-      }
-      if (lic.expiresAt && Date.now() > lic.expiresAt) {
-        return res.status(403).json({ valid: false, message: 'License has expired' });
-      }
-      if (deviceId && lic.boundDeviceId && lic.boundDeviceId !== deviceId) {
-        return res.status(403).json({ valid: false, message: 'Hardware device mismatch' });
-      }
-    }
-
-    // If master admin, verify email is still whitelisted
-    if (payload.role === 'admin') {
-      const isStillAdmin = MASTER_ADMIN_EMAILS.map(e => e.toLowerCase()).includes((payload.email || '').toLowerCase());
-      if (!isStillAdmin) {
-        return res.status(403).json({ valid: false, message: 'Admin privileges revoked' });
-      }
-    }
-
-    res.json({
-      valid: true,
-      user: payload
-    });
-  } catch (err: any) {
-    res.status(500).json({ valid: false, message: err.message });
-  }
-});
+// Master Admin Whitelist
+const MASTER_ADMIN_EMAILS = [
+  'thevivankhan@gmail.com',
+  'ololootc@gmail.com',
+  'thealphafxpro@gmail.com',
+  'ololouniversity@gmail.com'
+];
 
 app.get('/api/licenses', (req, res) => {
   res.json({ success: true, licenses: licensesData.licenses });
@@ -353,6 +144,194 @@ app.post('/api/licenses', (req, res) => {
   }
 });
 
+// Central Server-Authoritative License Key Validator
+// Allows any student on any device/domain to instantly validate keys issued by admin
+app.post('/api/validate-license', (req, res) => {
+  try {
+    const { key, deviceId, deviceName } = req.body;
+    const trimmed = (key || '').trim();
+    const lower = trimmed.toLowerCase();
+
+    // 1. Check Master Admin Whitelist Email
+    if (MASTER_ADMIN_EMAILS.map(e => e.toLowerCase()).includes(lower)) {
+      return res.json({
+        valid: true,
+        role: 'admin',
+        reason: 'Master Admin Access Verified',
+      });
+    }
+
+    // 2. Extract clean 7-character crypto key
+    const stripped = trimmed.toUpperCase().replace(/^ATM[-_\s]?/, '').replace(/[^A-Z0-9]/g, '');
+    const normalizedFull = stripped.length === 7 ? `ATM-${stripped}` : trimmed.toUpperCase();
+
+    // 3. Search in server license vault
+    const licenses = licensesData.licenses || [];
+    let foundIdx = licenses.findIndex(
+      (l: any) =>
+        l.cleanKey === stripped ||
+        (l.key && l.key.toUpperCase() === normalizedFull) ||
+        (l.key && l.key.replace(/[^A-Za-z0-9]/g, '').toUpperCase() === trimmed.replace(/[^A-Za-z0-9]/g, '').toUpperCase())
+    );
+
+    if (foundIdx === -1) {
+      // Check if an approved student application has this issuedKey
+      const appWithKey = studentApplications.find((a: any) =>
+        a.status === 'approved' && a.issuedKey && (
+          a.issuedKey.toUpperCase() === normalizedFull ||
+          a.issuedKey.toUpperCase().replace(/^ATM[-_\s]?/, '').replace(/[^A-Z0-9]/g, '') === stripped
+        )
+      );
+      if (appWithKey) {
+        const synthesizedLic = {
+          id: 'lic-' + appWithKey.id,
+          key: appWithKey.issuedKey,
+          cleanKey: stripped,
+          traderName: appWithKey.name,
+          contact: appWithKey.contact,
+          plan: appWithKey.plan || '1 Month ($47)',
+          status: 'active',
+          issuedAt: Date.now(),
+          expiresAt: appWithKey.plan?.includes('Lifetime') ? null : Date.now() + 30 * 86400000,
+          boundDeviceId: appWithKey.deviceId || deviceId || null,
+          boundDeviceName: appWithKey.deviceName || deviceName || 'Device',
+          boundAt: Date.now(),
+        };
+        licenses.unshift(synthesizedLic);
+        saveLicenses();
+        foundIdx = 0;
+      } else {
+        return res.json({
+          valid: false,
+          role: 'user',
+          reason: 'Invalid License Key. Please enter a valid 7-character ATM Key.',
+        });
+      }
+    }
+
+    const found = licenses[foundIdx];
+
+    // Check if suspended
+    if (found.status === 'suspended') {
+      return res.json({
+        valid: false,
+        role: 'user',
+        license: found,
+        reason: 'This license has been suspended by Desk Admin.',
+      });
+    }
+
+    // Check if expired
+    if (found.expiresAt && Date.now() > found.expiresAt) {
+      return res.json({
+        valid: false,
+        role: 'user',
+        license: found,
+        reason: `License expired on ${new Date(found.expiresAt).toLocaleDateString()}. Please renew with Support.`,
+      });
+    }
+
+    // 4. One Code = One Device Lock
+    if (deviceId) {
+      if (!found.boundDeviceId) {
+        found.boundDeviceId = deviceId;
+        found.boundDeviceName = deviceName || 'Device';
+        found.boundAt = Date.now();
+        licenses[foundIdx] = found;
+        saveLicenses();
+      } else if (found.boundDeviceId !== deviceId) {
+        return res.json({
+          valid: false,
+          role: 'user',
+          license: found,
+          reason: '🔒 Device Lock: This code is locked to another device (1 Code = 1 Device Only). Contact Admin to reset.',
+        });
+      }
+    }
+
+    return res.json({
+      valid: true,
+      role: 'user',
+      license: found,
+    });
+  } catch (err: any) {
+    res.status(500).json({ valid: false, error: err.message });
+  }
+});
+
+// --- Central Registered Students Storage ---
+const studentsPath = path.join(__dirname, 'registered_students.json');
+let registeredStudents: any[] = [];
+try {
+  if (fs.existsSync(studentsPath)) {
+    registeredStudents = JSON.parse(fs.readFileSync(studentsPath, 'utf8'));
+  }
+} catch (e) {
+  console.error('Error loading registered students', e);
+}
+
+function saveRegisteredStudents() {
+  try {
+    fs.writeFileSync(studentsPath, JSON.stringify(registeredStudents, null, 2));
+  } catch (e) {
+    console.error('Error saving registered students', e);
+  }
+}
+
+app.post('/api/register-student', (req, res) => {
+  try {
+    const { name, email, phone, password, deviceId, deviceName, traderId } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ success: false, message: 'Email and password required' });
+    }
+    const lowerEmail = email.trim().toLowerCase();
+    const existingIdx = registeredStudents.findIndex((s: any) => s.email?.toLowerCase() === lowerEmail);
+
+    const studentRecord = {
+      id: 'std-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+      name: (name || 'Student Member').trim(),
+      email: lowerEmail,
+      phone: (phone || '').trim(),
+      password: password.trim(),
+      traderId: traderId ? String(traderId).trim() : undefined,
+      devices: deviceId ? [deviceId] : [],
+      deviceName: deviceName || 'Device',
+      isLifetimePaid: true,
+      role: 'user',
+      status: 'active',
+      createdAt: new Date().toISOString(),
+      lastLogin: Date.now(),
+    };
+
+    if (existingIdx !== -1) {
+      registeredStudents[existingIdx] = { ...registeredStudents[existingIdx], ...studentRecord };
+    } else {
+      registeredStudents.unshift(studentRecord);
+    }
+    saveRegisteredStudents();
+
+    // Also push to student applications queue for Admin Review
+    const appRecord = {
+      id: 'app-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+      name: studentRecord.name,
+      email: studentRecord.email,
+      contact: studentRecord.phone || studentRecord.email,
+      traderId: studentRecord.traderId,
+      deviceId: deviceId || 'device_' + Date.now(),
+      deviceName: deviceName || 'Device',
+      submittedAt: Date.now(),
+      status: 'pending',
+      isNew: true,
+    };
+    studentApplications.unshift(appRecord);
+    saveStudentApps();
+
+    res.json({ success: true, student: studentRecord });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // --- Student Registration Applications Queue ---
 let studentApplications: any[] = [];
 const appsPath = path.join(__dirname, 'student_applications.json');
@@ -365,11 +344,26 @@ try {
 }
 
 function saveStudentApps() {
-  safeWriteJson(appsPath, studentApplications);
+  try {
+    fs.writeFileSync(appsPath, JSON.stringify(studentApplications, null, 2));
+  } catch (e) {
+    console.error('Error saving student applications', e);
+  }
 }
 
 app.get('/api/student-applications', (req, res) => {
   res.json({ success: true, applications: studentApplications });
+});
+
+// Lightweight Status polling for instant Admin Sound Notifications
+app.get('/api/student-applications/status', (req, res) => {
+  const pending = studentApplications.filter((a: any) => a.status === 'pending');
+  res.json({
+    success: true,
+    totalCount: studentApplications.length,
+    pendingCount: pending.length,
+    latestApplicant: pending[0] || null,
+  });
 });
 
 app.post('/api/student-applications', (req, res) => {
@@ -380,7 +374,7 @@ app.post('/api/student-applications', (req, res) => {
       if (idx !== -1) {
         studentApplications[idx] = appData;
       } else {
-        studentApplications.unshift(appData);
+        studentApplications.unshift({ ...appData, isNew: true });
       }
       saveStudentApps();
     }
@@ -400,6 +394,7 @@ app.post('/api/student-applications/approve', (req, res) => {
         status: 'approved',
         issuedKey,
         plan,
+        isNew: false,
       };
       saveStudentApps();
     }
@@ -438,25 +433,7 @@ app.post('/api/tawk-config', (req, res) => {
   }
 });
 
-// --- Pocket Option Real-time Postback Webhook & Trader ID Verification ---
-app.all('/api/pocket-option/postback', (req, res) => {
-  const params = { ...req.query, ...req.body };
-  const rawTraderId = String(params.trader_id || params.uid || params.user_id || params.sub_id || params.subid || '').trim();
-
-  if (rawTraderId) {
-    const cleanId = rawTraderId.replace(/\D/g, '') || rawTraderId;
-    if (!licensesData.verifiedTraderIds) licensesData.verifiedTraderIds = [];
-    if (!licensesData.verifiedTraderIds.includes(cleanId)) {
-      licensesData.verifiedTraderIds.unshift(cleanId);
-      saveLicenses();
-      console.log(`[PocketOption Webhook] Verified Trader ID Registered: ${cleanId}`);
-    }
-    return res.json({ success: true, registered: cleanId, status: 'ok' });
-  }
-
-  return res.json({ success: false, message: 'No trader_id received in postback payload' });
-});
-
+// --- Pocket Option Real-time Trader ID Verification ---
 app.get('/api/verify-trader-id', (req, res) => {
   const rawId = ((req.query.id as string) || '').trim();
   if (!rawId) {
@@ -475,7 +452,6 @@ app.get('/api/verify-trader-id', (req, res) => {
     traderId: rawId,
     accountCapital: 0,
     accessLevel: 0,
-    message: isMatch ? 'Trader ID verified under affiliate.' : 'Trader ID not registered or verified under affiliate system.',
   });
 });
 
@@ -488,7 +464,7 @@ app.post('/api/admin/trader-ids', (req, res) => {
     const { action, id } = req.body;
     const cleanId = (id || '').trim();
     if (!licensesData.verifiedTraderIds) {
-      licensesData.verifiedTraderIds = [];
+      licensesData.verifiedTraderIds = ['77554333', '143702223', '8849102', '9923184', '5521948'];
     }
     if (action === 'add' && cleanId) {
       if (!licensesData.verifiedTraderIds.includes(cleanId)) {
@@ -497,9 +473,6 @@ app.post('/api/admin/trader-ids', (req, res) => {
       }
     } else if (action === 'remove' && cleanId) {
       licensesData.verifiedTraderIds = licensesData.verifiedTraderIds.filter((x: string) => x !== cleanId);
-      saveLicenses();
-    } else if (action === 'clear') {
-      licensesData.verifiedTraderIds = [];
       saveLicenses();
     }
     res.json({ success: true, verifiedTraderIds: licensesData.verifiedTraderIds });
@@ -797,12 +770,38 @@ app.get('/api/broker-status', async (req, res) => {
 // API Routes
 app.post('/api/verify-password', async (req, res) => {
   const { email, password, deviceId } = req.body;
+  const lowerEmail = (email || '').trim().toLowerCase();
+  const trimmedPassword = (password || '').trim();
+
+  // 1. Check Central Registered Students Storage First
+  const localStudent = registeredStudents.find(
+    (s: any) => s.email?.toLowerCase() === lowerEmail
+  );
+
+  if (localStudent) {
+    if (localStudent.password !== trimmedPassword) {
+      return res.status(401).json({ success: false, message: 'Invalid credentials. Password does not match.' });
+    }
+    if (!localStudent.devices) localStudent.devices = [];
+    if (deviceId && !localStudent.devices.includes(deviceId)) {
+      localStudent.devices.push(deviceId);
+      saveRegisteredStudents();
+    }
+    localStudent.lastLogin = Date.now();
+    saveRegisteredStudents();
+    return res.json({
+      success: true,
+      student: localStudent,
+    });
+  }
+
+  // 2. Check Firestore fallback
   try {
-    const q = query(collection(db, 'students'), where('email', '==', email.trim().toLowerCase()));
+    const q = query(collection(db, 'students'), where('email', '==', lowerEmail));
     const snapshot = await getDocs(q);
     
     if (snapshot.empty) {
-      return res.status(401).json({ success: false, message: 'Invalid credentials' });
+      return res.status(401).json({ success: false, message: 'Invalid credentials. User not found.' });
     }
 
     const studentDoc = snapshot.docs[0];
@@ -881,16 +880,21 @@ app.post('/api/check-auth', async (req, res) => {
 app.post('/api/admin/verify', async (req, res) => {
   const { masterPassword } = req.body;
   try {
-    const validPassword = licensesData.masterPassword || 'admin';
-    if (masterPassword && masterPassword.trim() === validPassword) {
-      return res.json({ success: true, adminName: 'Master Admin' });
-    }
     const q = query(collection(db, 'admins'), where('password', '==', masterPassword));
     const snapshot = await getDocs(q);
     if (!snapshot.empty) {
-      return res.json({ success: true, adminName: snapshot.docs[0].data().name });
+      res.json({ success: true, adminName: snapshot.docs[0].data().name });
+    } else {
+      if (masterPassword === 'admin') {
+         const allAdminsQ = query(collection(db, 'admins'), limit(1));
+         const allAdmins = await getDocs(allAdminsQ);
+         if (allAdmins.empty) {
+            await addDoc(collection(db, 'admins'), { name: 'Main Admin', password: 'admin', role: 'admin' });
+            return res.json({ success: true, adminName: 'Main Admin' });
+         }
+      }
+      res.status(401).json({ success: false, message: 'Invalid admin password' });
     }
-    return res.status(401).json({ success: false, message: 'Invalid admin password' });
   } catch (error) {
     console.error("Admin verify error:", error);
     res.status(500).json({ success: false, message: 'Server error' });
@@ -1033,11 +1037,17 @@ app.get('/api/admin/admins', async (req, res) => {
 app.get('/api/admin/full-state', async (req, res) => {
   const { masterPassword } = req.query;
   try {
-    const validPassword = licensesData.masterPassword || 'admin';
-    const isMasterValid = masterPassword && (masterPassword === validPassword);
     const adminQ = query(collection(db, 'admins'), where('password', '==', masterPassword));
     const adminSnap = await getDocs(adminQ);
-    if (!isMasterValid && adminSnap.empty) {
+    if (adminSnap.empty) {
+      if (masterPassword === 'admin') {
+         const allAdminsQ = query(collection(db, 'admins'), limit(1));
+         const allAdmins = await getDocs(allAdminsQ);
+         if (allAdmins.empty) {
+            await addDoc(collection(db, 'admins'), { name: 'Main Admin', password: 'admin', role: 'admin' });
+            return res.json({ success: true, data: { admins: [{ name: 'Main Admin', password: 'admin' }], students: [] } });
+         }
+      }
       return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
     

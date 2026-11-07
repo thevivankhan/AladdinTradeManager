@@ -1,14 +1,15 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { AdminTradingRoom } from "./AdminTradingRoom";
 import { 
   CheckCircle2, XCircle, Clock, ShieldCheck, User, 
   Users, Key, Search, Shield, Copy, RefreshCw, Wrench,
   Smartphone, Monitor, Trash2, Power, PowerOff, Download, UserPlus,
   Image as ImageIcon, X, Eye, EyeOff, ShieldOff, Activity, Mail,
-  Send, MessageCircle, Sparkles, Check, UserCheck
+  Send, MessageCircle, Sparkles, Check, UserCheck, Bell
 } from "lucide-react";
 import {
   getIssuedLicenses,
+  syncLicensesFromServer,
   issueNewLicense,
   renewLicense,
   toggleSuspendLicense,
@@ -77,6 +78,47 @@ export const AdminPanel = ({
   const [newTraderIdInput, setNewTraderIdInput] = useState("");
   const [isUpdatingTraderIds, setIsUpdatingTraderIds] = useState(false);
 
+  // Live student signup alert state
+  const [newSignupAlert, setNewSignupAlert] = useState<{ name: string; contact: string; deviceName?: string } | null>(null);
+  const prevPendingCountRef = useRef<number | null>(null);
+  const isInitialPollRef = useRef(true);
+
+  const playNotificationSound = () => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
+      const now = ctx.currentTime;
+      // High-end dual bell chime (E5 -> B5)
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(659.25, now);
+      gain1.gain.setValueAtTime(0.3, now);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.35);
+
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(987.77, now + 0.15);
+      gain2.gain.setValueAtTime(0.35, now + 0.15);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(now + 0.15);
+      osc2.stop(now + 0.55);
+    } catch (e) {
+      console.debug('Notification chime fallback', e);
+    }
+  };
+
   const refreshStudentApps = () => {
     setStudentApps(getStudentApplications());
     fetch('/api/student-applications')
@@ -91,6 +133,9 @@ export const AdminPanel = ({
 
   useEffect(() => {
     setVaultLicenses(getIssuedLicenses());
+    syncLicensesFromServer().then((lics) => {
+      if (lics && lics.length > 0) setVaultLicenses(lics);
+    });
     refreshStudentApps();
     setTawkPropInput(getTawkToPropertyId());
     setTawkWidgetInput(getTawkToWidgetId());
@@ -103,6 +148,37 @@ export const AdminPanel = ({
         }
       })
       .catch(() => {});
+
+    // Polling every 3.5 seconds for instant notification of new student applications
+    const pollInterval = setInterval(() => {
+      fetch('/api/student-applications/status')
+        .then((res) => res.json())
+        .then((data) => {
+          if (data && typeof data.pendingCount === 'number') {
+            if (isInitialPollRef.current) {
+              prevPendingCountRef.current = data.pendingCount;
+              isInitialPollRef.current = false;
+            } else if (prevPendingCountRef.current !== null && data.pendingCount > prevPendingCountRef.current) {
+              // 🔔 NEW REGISTRATION RECEIVED! Trigger notification bell and alert banner
+              playNotificationSound();
+              if (data.latestApplicant) {
+                setNewSignupAlert({
+                  name: data.latestApplicant.name || 'New Student',
+                  contact: data.latestApplicant.contact || '',
+                  deviceName: data.latestApplicant.deviceName || data.latestApplicant.deviceId,
+                });
+              }
+              refreshStudentApps();
+              prevPendingCountRef.current = data.pendingCount;
+            } else {
+              prevPendingCountRef.current = data.pendingCount;
+            }
+          }
+        })
+        .catch(() => {});
+    }, 3500);
+
+    return () => clearInterval(pollInterval);
   }, []);
 
   const handleAddTraderId = async (e: React.FormEvent) => {
@@ -1118,6 +1194,47 @@ export const AdminPanel = ({
           </div>
         </div>
 
+        {/* Live Incoming Signup Alert Banner */}
+        {newSignupAlert && (
+          <div className="p-4 bg-gradient-to-r from-cyan-950/90 via-slate-900/90 to-emerald-950/90 border border-cyan-400/60 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-[0_0_25px_rgba(6,182,212,0.35)] animate-pulse">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-cyan-500/20 border border-cyan-400/50 flex items-center justify-center text-cyan-300 shrink-0">
+                <Bell className="w-5 h-5 animate-bounce" />
+              </div>
+              <div>
+                <div className="text-sm font-black text-white flex items-center gap-2 flex-wrap">
+                  <span>🔔 New Student Registration Received!</span>
+                  <span className="text-[10px] bg-cyan-400 text-slate-950 px-2 py-0.5 rounded font-black uppercase tracking-wider">Live Notification</span>
+                </div>
+                <p className="text-xs text-slate-300 mt-0.5">
+                  <strong className="text-cyan-300 font-bold">{newSignupAlert.name}</strong>
+                  {newSignupAlert.contact ? ` (${newSignupAlert.contact})` : ''} just submitted registration from{' '}
+                  <strong className="text-white">{newSignupAlert.deviceName || 'Student Device'}</strong>.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
+              <button
+                onClick={() => {
+                  setActiveTab('studentApps');
+                  setNewSignupAlert(null);
+                }}
+                className="px-4 py-2 bg-gradient-to-r from-cyan-400 to-emerald-400 hover:from-cyan-300 hover:to-emerald-300 text-slate-950 text-xs font-black rounded-lg transition-all shadow-md shadow-cyan-500/20 cursor-pointer flex items-center gap-1.5"
+              >
+                <Check className="w-4 h-4" />
+                <span>Review & Issue Key</span>
+              </button>
+              <button
+                onClick={() => setNewSignupAlert(null)}
+                className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+                title="Dismiss"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Stats Overview */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center gap-4">
@@ -1450,7 +1567,7 @@ export const AdminPanel = ({
                                     <option value="3 Months ($97)">3 Months ($97)</option>
                                     <option value="6 Months ($147)">6 Months ($147)</option>
                                     <option value="1 Year ($197)">1 Year ($197)</option>
-                                    <option value="Lifetime VIP ($247)">Lifetime VIP ($247)</option>
+                                    <option value="Lifetime VIP ($297)">Lifetime VIP ($297)</option>
                                   </select>
 
                                   <button
@@ -1693,7 +1810,7 @@ export const AdminPanel = ({
                           <option value="3 Months ($97)">3 Months ($97) — 90 Days</option>
                           <option value="6 Months ($147)">6 Months ($147) — 180 Days</option>
                           <option value="1 Year ($197)">1 Year ($197) — 365 Days</option>
-                          <option value="Lifetime VIP ($247)">Lifetime VIP ($247) — Unlimited</option>
+                          <option value="Lifetime VIP ($297)">Lifetime VIP ($297) — Unlimited</option>
                         </select>
                       </div>
                     </div>

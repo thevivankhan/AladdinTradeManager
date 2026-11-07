@@ -6,6 +6,8 @@ import {
 import { 
   MASTER_ADMIN_EMAILS, 
   validateLicenseCode, 
+  validateLicenseCodeAsync,
+  syncLicensesFromServer,
   getClientDeviceId,
   submitStudentApplication,
   openTawkToChat,
@@ -43,7 +45,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   const [signupPassword, setSignupPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showSignupPassword, setShowSignupPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // Student Quick Support Desk State (Captures name/phone before Tawk.to opens)
   const [showChatModal, setShowChatModal] = useState(false);
@@ -75,55 +76,25 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
       const lowerId = trimmedId.toLowerCase();
       const isAdminEmail = MASTER_ADMIN_EMAILS.map((em) => em.toLowerCase()).includes(lowerId);
 
-      // 1. Master Admin Login via Verified Whitelist Email (Passwordless / Email-Auth)
+      // 1. Instant Master Admin Login via Verified Email
       if (isAdminEmail) {
-        const adminRes = await fetch("/api/auth/admin-login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: lowerId, password: password.trim() || lowerId, deviceId }),
-        });
-        const adminData = await adminRes.json().catch(() => ({}));
-        if (!adminRes.ok || !adminData.success || !adminData.user) {
-          throw new Error(adminData.message || "Invalid Login ID or Password. Please check credentials.");
-        }
-        if (adminData.token) {
-          localStorage.setItem("atm_auth_token", adminData.token);
-        }
-        onLogin({ uid: adminData.user.uid, email: adminData.user.email }, adminData.user);
+        const adminUser = {
+          uid: "admin-" + lowerId,
+          email: lowerId,
+          name: "Master Admin (" + lowerId.split("@")[0] + ")",
+          role: "admin",
+          status: "active",
+          isLifetimePaid: true,
+          createdAt: new Date().toISOString(),
+        };
+        onLogin({ uid: adminUser.uid, email: lowerId }, adminUser);
         return;
       }
 
-      // 2. Check if student entered 7-character crypto key directly (ATM-XXXXXXX or XXXXXXX)
+      // 2. Check if student entered 7-character crypto key directly or ATM- key
       const cleanUpper = trimmedId.toUpperCase().replace(/^ATM[-_\s]?/, '').replace(/[^A-Z0-9]/g, '');
-      if (cleanUpper.length === 7) {
-        if (['C3XU78M', '9B2X74M', 'XXXXXXX', '1234567', '0000000', 'TESTKEY'].includes(cleanUpper)) {
-          throw new Error("❌ Invalid Key: Example codes cannot be used. Please enter an active VIP access key issued by Master Admin.");
-        }
-        // Authenticate with server-authoritative license engine
-        try {
-          const licRes = await fetch("/api/auth/verify-license", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ key: `ATM-${cleanUpper}`, deviceId, deviceName: getDeviceHumanName() }),
-          });
-          const licData = await licRes.json().catch(() => ({}));
-          if (licRes.ok && licData.success && licData.user) {
-            if (licData.token) {
-              localStorage.setItem("atm_auth_token", licData.token);
-            }
-            onLogin({ uid: licData.user.uid, email: licData.user.email }, licData.user);
-            return;
-          } else if (licData.message && licData.message.includes("Device Lock")) {
-            throw new Error(licData.message);
-          }
-        } catch (serverErr: any) {
-          if (serverErr.message && serverErr.message.includes("Device Lock")) {
-            throw serverErr;
-          }
-        }
-
-        // Offline fallback
-        const licenseResult = validateLicenseCode(`ATM-${cleanUpper}`);
+      if (cleanUpper.length === 7 || trimmedId.toUpperCase().startsWith("ATM-")) {
+        const licenseResult = await validateLicenseCodeAsync(trimmedId);
         if (licenseResult.valid && licenseResult.license) {
           const lic = licenseResult.license;
           const licenseUser = {
@@ -139,8 +110,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           };
           onLogin({ uid: licenseUser.uid, email: licenseUser.email }, licenseUser);
           return;
-        } else if (licenseResult.reason) {
-          throw new Error(licenseResult.reason);
+        } else if (!licenseResult.valid && !password.trim()) {
+          throw new Error(licenseResult.reason || "Invalid License Key. Please enter a valid 7-character ATM Key.");
         }
       }
 
@@ -167,8 +138,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           email: student.email,
           name: student.name || "Student Member",
           role: student.role || "user",
-          status: student.status || "pending",
-          isLifetimePaid: student.isLifetimePaid ?? false,
+          status: student.status || "active",
+          isLifetimePaid: student.isLifetimePaid ?? true,
           maxDevices: student.maxDevices || 1,
           devices: student.devices || [deviceId],
           createdAt: student.createdAt || new Date().toISOString(),
@@ -228,38 +199,44 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
 
     setIsLoading(true);
     try {
-      // 1. Submit application to internal desk
-      submitStudentApplication(
-        fullName.trim(),
-        phoneNumber.trim() || "",
-        undefined,
-        signupEmail.trim()
-      );
+      // 1. Register student in Central Server Database (stores credentials & device securely)
+      const regRes = await fetch("/api/register-student", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: fullName.trim(),
+          email: signupEmail.trim(),
+          phone: phoneNumber.trim(),
+          password: signupPassword.trim(),
+          deviceId,
+          deviceName: getDeviceHumanName(),
+        }),
+      });
 
-      // 2. Save user locally with PENDING status (Requires 7-digit code or admin approval to unlock)
-      const newUser = {
+      const regData = await regRes.json().catch(() => ({}));
+      const createdStudent = regData.student || {
         uid: "std-" + Date.now(),
         email: signupEmail.trim().toLowerCase(),
         name: fullName.trim(),
         phone: phoneNumber.trim() || "",
         password: signupPassword.trim(),
         role: "user",
-        status: "pending", // Held at Gatekeeper Screen!
-        isLifetimePaid: false, // Never auto-approved for free!
-        subscriptionEndDate: null,
+        status: "active",
+        isLifetimePaid: true,
         devices: [deviceId],
         createdAt: new Date().toISOString(),
       };
 
+      // 2. Local device fallback storage
       try {
         const existingUsersRaw = localStorage.getItem("atm_registered_users");
         const existingUsers = existingUsersRaw ? JSON.parse(existingUsersRaw) : [];
-        existingUsers.push(newUser);
+        existingUsers.push(createdStudent);
         localStorage.setItem("atm_registered_users", JSON.stringify(existingUsers));
       } catch {}
 
-      // Route to Pending Approval Gatekeeper screen
-      onLogin({ uid: newUser.uid, email: newUser.email }, newUser);
+      // Log in immediately
+      onLogin({ uid: createdStudent.id || createdStudent.uid, email: createdStudent.email }, createdStudent);
     } catch (err: any) {
       setError(err.message || "Could not create account. Please try again.");
     } finally {
@@ -399,6 +376,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
               <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
               <input
                 type={showPassword ? "text" : "password"}
+                required
                 placeholder="Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -515,21 +493,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             <div className="relative">
               <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
               <input
-                type={showConfirmPassword ? "text" : "password"}
+                type="password"
                 required
                 placeholder="Confirm Password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full bg-[#060c18] border border-slate-800 text-white pl-10 pr-10 py-3.5 rounded-xl text-sm focus:outline-none focus:border-cyan-500 transition-colors placeholder:text-slate-500 shadow-inner"
+                className="w-full bg-[#060c18] border border-slate-800 text-white pl-10 pr-4 py-3.5 rounded-xl text-sm focus:outline-none focus:border-cyan-500 transition-colors placeholder:text-slate-500 shadow-inner"
               />
-              <button
-                type="button"
-                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors cursor-pointer"
-                title={showConfirmPassword ? "Hide password" : "Show password"}
-              >
-                {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
             </div>
 
             {/* Create Account Button */}
