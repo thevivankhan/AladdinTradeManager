@@ -1,0 +1,110 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile and subscription status",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["user", "admin"] },
+        "isLifetimePaid": { "type": "boolean" },
+        "hasPendingPayment": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["active", "suspended", "pending"] },
+        "lastLogin": { "type": "string", "format": "date-time" },
+        "deviceId": { "type": "string" },
+        "deviceInfo": { "type": "string" },
+        "appState": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "phone": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "name": { "type": "string" },
+        "isOnline": { "type": "boolean" },
+        "lastSeen": { "type": "string", "format": "date-time" },
+        "activeDevices": { "type": "array", "items": { "type": "string" } },
+        "deviceLimit": { "type": "integer" },
+        "subscriptionStartDate": { "type": "string", "format": "date-time" },
+        "subscriptionEndDate": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "role", "isLifetimePaid", "hasPendingPayment", "createdAt"]
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "Payment proof submitted by a user",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "method": { "type": "string", "enum": ["upi", "crypto"] },
+        "transactionId": { "type": "string" },
+        "screenshot": { "type": "string", "description": "Base64 encoded image" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "email", "method", "transactionId", "status", "createdAt"]
+    },
+    "PhoneLookup": {
+      "title": "PhoneLookup",
+      "description": "Maps phone numbers to user emails for lookup",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email" },
+        "phone": { "type": "string" }
+      },
+      "required": ["email", "phone"]
+    },
+    "Signal": {
+      "title": "Signal",
+      "description": "Real-time trade signals",
+      "type": "object",
+      "properties": {
+        "asset": { "type": "string" },
+        "entry": { "type": "string" },
+        "sl": { "type": "string" },
+        "tp": { "type": "string" },
+        "expiry": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "closed", "won", "lost"] },
+        "imageUrl": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["asset", "entry", "sl", "tp", "status", "createdAt"]
+    },
+    "MarketBias": {
+      "title": "MarketBias",
+      "description": "Daily market bias and news",
+      "type": "object",
+      "properties": {
+        "pair": { "type": "string" },
+        "bias": { "type": "string", "enum": ["bullish", "bearish", "neutral"] },
+        "newsTime": { "type": "string" },
+        "impact": { "type": "string", "enum": ["high", "medium", "low"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["pair", "bias", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Stores user profiles and their subscription status"
+    },
+    "/payments/{paymentId}": {
+      "schema": { "$ref": "#/entities/Payment" },
+      "description": "Stores payment proofs submitted by users"
+    },
+    "/phone_lookup/{phone}": {
+      "schema": { "$ref": "#/entities/PhoneLookup" },
+      "description": "Maps phone numbers to user emails"
+    },
+    "/signals/{signalId}": {
+      "schema": { "$ref": "#/entities/Signal" },
+      "description": "Stores real-time trade signals"
+    },
+    "/market_bias/{biasId}": {
+      "schema": { "$ref": "#/entities/MarketBias" },
+      "description": "Stores daily market bias and news"
+    }
+  }
+}

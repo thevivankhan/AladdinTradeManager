@@ -1,0 +1,233 @@
+@import "tailwindcss";
+
+html, body, #root {
+  background-color: #020617 !important;
+  color: #f8fafc;
+  min-height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+@theme {
+  --animate-scan: scan 2s ease-in-out infinite;
+  @keyframes scan {
+    0% { top: 0; opacity: 0; }
+    10% { opacity: 1; }
+    90% { opacity: 1; }
+    100% { top: 100%; opacity: 0; }
+  }
+}
+
+@layer utilities {
+  .perspective-1000 {
+    perspective: 1000px;
+  }
+  .preserve-3d {
+    transform-style: preserve-3d;
+  }
+  .backface-hidden {
+    backface-visibility: hidden;
+  }
+  .rotate-y-90 {
+    transform: rotateY(90deg);
+  }
+  .rotate-y-\[-20deg\] {
+    transform: rotateY(-20deg);
+  }
+  .rotate-x-\[10deg\] {
+    transform: rotateX(10deg);
+  }
+  .-rotate-x-90 {
+    transform: rotateX(-90deg);
+  }
+}
+
+@layer utilities {
+  /* Clean frictionless scrolling with NO sliding line or disappearing thumb shadow */
+  .custom-scrollbar,
+  .neon-scrollbar-x,
+  .neon-scrollbar-y,
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .custom-scrollbar::-webkit-scrollbar,
+  .neon-scrollbar-x::-webkit-scrollbar,
+  .neon-scrollbar-y::-webkit-scrollbar,
+  .no-scrollbar::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+  }
+  .cyber-box {
+    border-radius: 6px !important;
+  }
+}
+
+@layer base {
+  /* Light Theme Overrides */
+  body.theme-light {
+    background-color: #f8fafc !important; /* slate-50 */
+    color: #0f172a !important; /* slate-900 */
+  }
+  body.theme-light .bg-slate-950,
+  body.theme-light .bg-\[\#0B1120\] {
+    background-color: #f1f5f9 !important; /* slate-100 */
+  }
+  body.theme-light .bg-slate-900,
+  body.theme-light .bg-\[\#131C31\] {
+    background-color: #ffffff !important; /* white */
+  }
+  body.theme-light .bg-slate-800,
+  body.theme-light .bg-\[\#1E293B\] {
+    background-color: #f8fafc !important; /* slate-50 */
+  }
+  body.theme-light .bg-slate-700 {
+    background-color: #e2e8f0 !important; /* slate-200 */
+  }
+  body.theme-light .text-white {
+    color: #0f172a !important; /* slate-900 */
+  }
+  body.theme-light .text-slate-200,
+  body.theme-light .text-slate-300 {
+    color: #1e293b !important; /* slate-800 */
+  }
+  body.theme-light .text-slate-400 {
+    color: #475569 !important; /* slate-600 */
+  }
+  body.theme-light .text-slate-500 {
+    color: #64748b !important; /* slate-500 */
+  }
+  body.theme-light .border-slate-800,
+  body.theme-light .border-slate-700,
+  body.theme-light .border-slate-600 {
+    border-color: #cbd5e1 !important; /* slate-300 */
+  }
+  body.theme-light .text-emerald-500,
+  body.theme-light .text-emerald-400 {
+    color: #059669 !important; /* emerald-600 */
+  }
+  body.theme-light .text-rose-500,
+  body.theme-light .text-rose-400 {
+    color: #e11d48 !important; /* rose-600 */
+  }
+  body.theme-light .text-indigo-500,
+  body.theme-light .text-indigo-400,
+  body.theme-light .text-blue-500,
+  body.theme-light .text-blue-400 {
+    color: #4f46e5 !important; /* indigo-600 */
+  }
+  body.theme-light .from-slate-900 {
+    --tw-gradient-from: #ffffff !important;
+  }
+  body.theme-light .to-slate-800 {
+    --tw-gradient-to: #f8fafc !important;
+  }
+  
+  /* Neon Theme Overrides: Refined Institutional Glow (Non-distracting) */
+  body.theme-neon {
+    background-color: #030712 !important;
+    color: #00f59b !important;
+  }
+  body.theme-neon .bg-slate-950,
+  body.theme-neon .bg-\[\#0B1120\] {
+    background-color: #040816 !important;
+  }
+  body.theme-neon .bg-slate-900,
+  body.theme-neon .bg-\[\#131C31\] {
+    background-color: #080d1a !important;
+    border-color: rgba(0, 245, 155, 0.4) !important;
+    box-shadow: 0 0 6px rgba(0, 245, 155, 0.12);
+  }
+  body.theme-neon .bg-slate-800,
+  body.theme-neon .bg-\[\#1E293B\] {
+    background-color: #0b1224 !important;
+  }
+  body.theme-neon .bg-slate-700 {
+    background-color: #111b33 !important;
+  }
+  body.theme-neon .text-white,
+  body.theme-neon .text-slate-200,
+  body.theme-neon .text-slate-300,
+  body.theme-neon .text-slate-400,
+  body.theme-neon .text-slate-500 {
+    color: #00f59b !important;
+  }
+  body.theme-neon .border-slate-800,
+  body.theme-neon .border-slate-700,
+  body.theme-neon .border-slate-600 {
+    border-color: rgba(0, 245, 155, 0.3) !important;
+  }
+  body.theme-neon .text-emerald-500,
+  body.theme-neon .text-emerald-400 {
+    color: #00f59b !important;
+    text-shadow: 0 0 4px rgba(0, 245, 155, 0.4);
+  }
+  body.theme-neon .text-rose-500,
+  body.theme-neon .text-rose-400 {
+    color: #fb7185 !important;
+    text-shadow: 0 0 4px rgba(251, 113, 133, 0.4);
+  }
+  body.theme-neon .text-indigo-500,
+  body.theme-neon .text-indigo-400,
+  body.theme-neon .text-blue-500,
+  body.theme-neon .text-blue-400 {
+    color: #38bdf8 !important;
+    text-shadow: 0 0 4px rgba(56, 189, 248, 0.4);
+  }
+  body.theme-neon .bg-emerald-500,
+  body.theme-neon .bg-emerald-600 {
+    background-color: #00f59b !important;
+    color: #020617 !important;
+    box-shadow: 0 0 6px rgba(0, 245, 155, 0.35);
+  }
+  body.theme-neon .bg-rose-500,
+  body.theme-neon .bg-rose-600 {
+    background-color: #f43f5e !important;
+    color: #ffffff !important;
+    box-shadow: 0 0 6px rgba(244, 63, 94, 0.35);
+  }
+  body.theme-neon .bg-indigo-500,
+  body.theme-neon .bg-indigo-600,
+  body.theme-neon .bg-blue-500,
+  body.theme-neon .bg-blue-600 {
+    background-color: #0ea5e9 !important;
+    color: #ffffff !important;
+    box-shadow: 0 0 6px rgba(14, 165, 233, 0.35);
+  }
+  body.theme-neon .from-slate-900 {
+    --tw-gradient-from: #080d1a !important;
+  }
+  body.theme-neon .to-slate-800 {
+    --tw-gradient-to: #0c142b !important;
+  }
+}
+
+/* Compact Tawk.to Live Chat Icon - unobtrusive placement on landing page */
+#tawk-bubble-container,
+div[id*="tawk-bubble"],
+.tawk-min-container {
+  transform: scale(0.72) !important;
+  transform-origin: bottom right !important;
+  bottom: 12px !important;
+  right: 12px !important;
+}
+
+/* Ensure maximized chat box remains normal readable size */
+div[id*="tawk-chat-container"] {
+  transform: none !important;
+}
+
+/* Hide floating Tawk bubble only when explicitly tagged */
+body.hide-tawk-floating #tawk-bubble-container,
+body.hide-tawk-floating div[id*="tawk-bubble"],
+body.hide-tawk-floating .tawk-min-container,
+body.hide-tawk-floating div[class*="tawk"],
+body.hide-tawk-floating iframe[title*="chat" i],
+body.hide-tawk-floating iframe[src*="tawk.to" i],
+body.hide-tawk-floating div[id*="tawk"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
