@@ -23,3 +23,28 @@ export const openTelegramSupport = (text?: string) => {
     window.open(tgDogUrl, '_blank', 'noopener,noreferrer');
   }
 };
+
+export const openSaifyKhanTelegram = (text?: string) => {
+  const queryText = (text || '').trim();
+  const encoded = encodeURIComponent(queryText);
+  const tgProtocol = `tg://resolve?domain=thevivankhan${encoded ? `&text=${encoded}` : ''}`;
+  const tgDogUrl = `https://telegram.dog/thevivankhan${encoded ? `?text=${encoded}` : ''}`;
+  const tmeUrl = `https://t.me/thevivankhan${encoded ? `?text=${encoded}` : ''}`;
+
+  const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+  const isAndroid = /Android/i.test(userAgent);
+  const isIOS = /iPhone|iPad|iPod/i.test(userAgent);
+  const isMobile = isAndroid || isIOS;
+
+  if (isMobile) {
+    try {
+      window.location.href = tgProtocol;
+    } catch {}
+    setTimeout(() => {
+      window.location.href = tgDogUrl;
+    }, 1200);
+  } else {
+    window.open(tmeUrl, '_blank', 'noopener,noreferrer');
+  }
+};
+

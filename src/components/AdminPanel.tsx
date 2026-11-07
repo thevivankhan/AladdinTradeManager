@@ -597,8 +597,8 @@ export const AdminPanel = ({
     showConfirm(
       "Reset Device Lock",
       `Unlock hardware device binding for ${lic.traderName} (${lic.key})? They will be allowed to link a new phone on their next login.`,
-      () => {
-        resetLicenseDeviceLock(lic.id);
+      async () => {
+        await resetLicenseDeviceLock(lic.id);
         setVaultLicenses(getIssuedLicenses());
         showAlert("Device Lock Reset", `Device binding cleared for ${lic.traderName}. They can now login from their new device.`);
       }
@@ -1591,19 +1591,23 @@ export const AdminPanel = ({
                               </div>
 
                               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-400 pt-0.5">
-                                {app.email && (
-                                  <span className="flex items-center gap-1 text-slate-300">
-                                    ✉️ Email: <strong className="text-white font-mono">{app.email}</strong>
-                                  </span>
-                                )}
                                 <span className="flex items-center gap-1 text-slate-300">
-                                  📱 Phone: <strong className="text-white font-mono">{app.contact}</strong>
+                                  📱 Contact: <strong className="text-white font-mono">{app.contact}</strong>
                                 </span>
                                 <span className="flex items-center gap-1 text-cyan-300">
-                                  🆔 Pocket Option UID: <strong className="text-cyan-200 font-mono">{app.traderId || "None (Direct Member)"}</strong>
+                                  🏛️ Broker: <strong className="text-cyan-200">{app.broker || "Pocket Option"}</strong>
+                                </span>
+                                <span className="flex items-center gap-1 text-cyan-300">
+                                  🆔 UID: <strong className="text-cyan-200 font-mono">{app.traderId || "Pending Verification"}</strong>
+                                </span>
+                                <span className="flex items-center gap-1 text-emerald-400">
+                                  💰 Capital: <strong className="text-emerald-300 font-semibold">{app.capital || "$100 - $500"}</strong>
+                                </span>
+                                <span className="flex items-center gap-1 text-amber-300">
+                                  🎯 Plan: <strong className="text-amber-200 font-semibold">{app.plan || "Lifetime VIP ($247)"}</strong>
                                 </span>
                                 <span className="flex items-center gap-1 text-slate-300 text-xs">
-                                  💻 Device: <strong className="text-cyan-300 font-semibold">{app.deviceName || app.deviceId}</strong>
+                                  🛡️ Device: <strong className="text-cyan-300 font-semibold">{app.deviceName || app.deviceId}</strong>
                                 </span>
                               </div>
 
@@ -1690,7 +1694,7 @@ export const AdminPanel = ({
                                     <button
                                       onClick={() => handleArchiveStudent(app.id)}
                                       className="px-2.5 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 transition-all flex items-center gap-1 text-xs font-bold cursor-pointer active:scale-95"
-                                      title="Move to Past Records / Trash (डेटा सुरक्षित रहेगा)"
+                                      title="Move to Past Records / Trash (Safe Archive)"
                                     >
                                       <Archive className="w-3.5 h-3.5" />
                                       <span>Archive</span>

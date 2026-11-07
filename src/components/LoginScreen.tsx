@@ -6,10 +6,13 @@ import {
 import { 
   MASTER_ADMIN_EMAILS, 
   validateLicenseCode, 
+  verifyLicenseKeyOnline,
+  saveActiveSession,
   getClientDeviceId,
+  getDeviceHumanName,
   submitStudentApplication 
 } from "../lib/licenseEngine";
-import { openTelegramSupport } from "../lib/telegram";
+import { openTelegramSupport, openSaifyKhanTelegram } from "../lib/telegram";
 
 interface LoginScreenProps {
   onLogin: (user: any, dbUser: any) => void;
@@ -35,11 +38,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   // Key Access State
   const [keyCodeInput, setKeyCodeInput] = useState("");
 
-  // Student Sign-Up State
+  // Student VIP Access Sign-Up State (5 Institutional Fields)
   const [studentName, setStudentName] = useState("");
-  const [studentEmail, setStudentEmail] = useState("");
-  const [studentPhone, setStudentPhone] = useState("");
+  const [studentContact, setStudentContact] = useState("");
+  const [studentBroker, setStudentBroker] = useState("Pocket Option");
   const [studentTraderId, setStudentTraderId] = useState("");
+  const [studentCapital, setStudentCapital] = useState("$100 - $500 (Standard Growth)");
+  const [studentPlan, setStudentPlan] = useState("Lifetime VIP Access ($247) — Never Pay Again");
   const [submittedApp, setSubmittedApp] = useState<any | null>(null);
 
   // Password / Master Admin Login State
@@ -73,9 +78,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
       const cleanUpper = trimmed.toUpperCase().replace(/^ATM[-_\s]?/, '').replace(/[^A-Z0-9]/g, '');
       const testKey = cleanUpper.length === 7 ? `ATM-${cleanUpper}` : trimmed;
 
-      const licenseResult = validateLicenseCode(testKey);
+      // Online authoritative validation with hardware anti-piracy lock
+      const licenseResult = await verifyLicenseKeyOnline(testKey);
       if (licenseResult.valid) {
         const lic = licenseResult.license;
+        if (lic) {
+          saveActiveSession(lic);
+        }
         const licenseUser = {
           uid: "lic-" + (lic?.cleanKey || cleanUpper),
           email: lic?.traderName || `trader-${cleanUpper}@aladdin.org.in`,
@@ -91,7 +100,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
         return;
       }
 
-      throw new Error(licenseResult.reason || "Invalid Access Key. Please contact Support Desk.");
+      throw new Error(licenseResult.reason || "Invalid Access Key. Please contact Master Admin (@thevivankhan).");
     } catch (err: any) {
       setError(err.message || "Failed to verify access key.");
     } finally {
@@ -99,7 +108,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
     }
   };
 
-  // Handle Student Sign-Up Request
+  // Handle Student VIP Access Request (5 Institutional Fields)
   const handleSignUpSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -108,8 +117,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
       setError("Please enter your full name.");
       return;
     }
-    if (!studentEmail.trim() || !studentEmail.includes("@")) {
-      setError("Please enter a valid email address.");
+    if (!studentContact.trim()) {
+      setError("Please enter your Telegram handle or WhatsApp/Phone number.");
       return;
     }
 
@@ -117,9 +126,12 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
     try {
       const newApp = submitStudentApplication(
         studentName.trim(),
-        studentPhone.trim() || "",
+        studentContact.trim(),
         studentTraderId.trim() || undefined,
-        studentEmail.trim()
+        undefined,
+        studentBroker.trim(),
+        studentCapital.trim(),
+        studentPlan.trim()
       );
       setSubmittedApp(newApp);
     } catch (err: any) {
@@ -357,13 +369,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           </form>
         )}
 
-        {/* TAB 2: STUDENT SIGN-UP APPLICATION FORM */}
+        {/* TAB 2: INSTITUTIONAL VIP ACCESS APPLICATION FORM (5 CORE FIELDS) */}
         {activeTab === "signup" && !submittedApp && (
-          <form onSubmit={handleSignUpSubmit} className="space-y-3">
-            {/* Full Name */}
+          <form onSubmit={handleSignUpSubmit} className="space-y-2.5">
+            {/* Field 1: Full Trader Name */}
             <div className="space-y-1 text-left">
-              <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider pl-1">
-                Full Name *
+              <label className="text-[10px] font-bold text-slate-300 uppercase tracking-wider pl-0.5">
+                1. Trader Full Name *
               </label>
               <input
                 type="text"
@@ -371,73 +383,125 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                 placeholder="e.g. Rohit Sharma"
                 value={studentName}
                 onChange={(e) => setStudentName(e.target.value)}
-                className="w-full bg-[#060c18] border border-slate-800 text-white px-3.5 py-3 rounded-xl text-sm focus:outline-none focus:border-cyan-500 transition-colors placeholder:text-slate-500 shadow-inner"
+                className="w-full bg-[#060c18] border border-slate-800 text-white px-3 py-2 rounded-xl text-xs focus:outline-none focus:border-cyan-500 transition-colors placeholder:text-slate-600 shadow-inner"
               />
             </div>
 
-            {/* Email Address */}
+            {/* Field 2: Telegram / WhatsApp Contact */}
             <div className="space-y-1 text-left">
-              <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider pl-1">
-                Email Address *
+              <label className="text-[10px] font-bold text-slate-300 uppercase tracking-wider pl-0.5">
+                2. Telegram Handle or WhatsApp *
               </label>
               <input
-                type="email"
+                type="text"
                 required
-                placeholder="e.g. rohit.trader@gmail.com"
-                value={studentEmail}
-                onChange={(e) => setStudentEmail(e.target.value)}
-                className="w-full bg-[#060c18] border border-slate-800 text-white px-3.5 py-3 rounded-xl text-sm focus:outline-none focus:border-cyan-500 transition-colors placeholder:text-slate-500 shadow-inner"
+                placeholder="e.g. @rohit_trader or +91 98765 43210"
+                value={studentContact}
+                onChange={(e) => setStudentContact(e.target.value)}
+                className="w-full bg-[#060c18] border border-slate-800 text-white px-3 py-2 rounded-xl text-xs focus:outline-none focus:border-cyan-500 transition-colors placeholder:text-slate-600 shadow-inner"
               />
             </div>
 
-            {/* WhatsApp Number (Optional) */}
+            {/* Field 3: Broker & Trader ID (UID) */}
             <div className="space-y-1 text-left">
-              <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider pl-1">
-                WhatsApp Number
-              </label>
-              <input
-                type="tel"
-                placeholder="Mobile number (optional)"
-                value={studentPhone}
-                onChange={(e) => setStudentPhone(e.target.value)}
-                className="w-full bg-[#060c18] border border-slate-800 text-white px-3.5 py-3 rounded-xl text-sm focus:outline-none focus:border-cyan-500 transition-colors placeholder:text-slate-500 shadow-inner"
-              />
-            </div>
-
-            {/* Pocket Option Trader ID (Optional) */}
-            <div className="space-y-1 text-left">
-              <div className="flex items-center justify-between pl-1">
-                <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">
-                  Pocket Option Trader ID (UID)
+              <div className="flex items-center justify-between pl-0.5">
+                <label className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">
+                  3. Broker & Trader ID (UID)
                 </label>
                 <a
                   href="https://pocket-friends.co/r/mphdnyllo5"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-[10px] text-cyan-400 hover:underline"
+                  className="text-[9px] text-cyan-400 hover:underline font-semibold"
                 >
                   Create Broker ID (Free)
                 </a>
               </div>
-              <input
-                type="text"
-                placeholder="e.g. 143702223 (optional)"
-                value={studentTraderId}
-                onChange={(e) => setStudentTraderId(e.target.value.replace(/\D/g, ''))}
-                className="w-full bg-[#060c18] border border-slate-800 text-white px-3.5 py-3 rounded-xl text-sm font-mono focus:outline-none focus:border-cyan-500 transition-colors placeholder:text-slate-500 shadow-inner"
-              />
+              <div className="grid grid-cols-5 gap-1.5">
+                <select
+                  value={studentBroker}
+                  onChange={(e) => setStudentBroker(e.target.value)}
+                  className="col-span-2 bg-[#060c18] border border-slate-800 text-white px-2 py-2 rounded-xl text-[11px] focus:outline-none focus:border-cyan-500 transition-colors"
+                >
+                  <option value="Pocket Option">Pocket Option (Official)</option>
+                  <option value="Quotex">Quotex</option>
+                  <option value="Binomo">Binomo</option>
+                  <option value="IQ Option">IQ Option</option>
+                  <option value="Deriv">Deriv</option>
+                  <option value="Exness">Exness</option>
+                  <option value="Other Broker">Other Broker</option>
+                </select>
+                <input
+                  type="text"
+                  placeholder="UID (e.g. 143702223)"
+                  value={studentTraderId}
+                  onChange={(e) => setStudentTraderId(e.target.value.replace(/\D/g, ''))}
+                  className="col-span-3 w-full bg-[#060c18] border border-slate-800 text-white px-3 py-2 rounded-xl text-xs font-mono focus:outline-none focus:border-cyan-500 transition-colors placeholder:text-slate-600 shadow-inner"
+                />
+              </div>
+            </div>
+
+            {/* Field 4: Trading Account Capital */}
+            <div className="space-y-1 text-left">
+              <label className="text-[10px] font-bold text-slate-300 uppercase tracking-wider pl-0.5">
+                4. Trading Account Capital
+              </label>
+              <select
+                value={studentCapital}
+                onChange={(e) => setStudentCapital(e.target.value)}
+                className="w-full bg-[#060c18] border border-slate-800 text-white px-3 py-2 rounded-xl text-xs focus:outline-none focus:border-cyan-500 transition-colors"
+              >
+                <option value="$50 - $100 (Micro Account)">$50 - $100 (Micro Account)</option>
+                <option value="$100 - $500 (Standard Growth)">$100 - $500 (Standard Growth)</option>
+                <option value="$500 - $1,000 (Advanced Trader)">$500 - $1,000 (Advanced Trader)</option>
+                <option value="$1,000 - $5,000 (Institutional Suite)">$1,000 - $5,000 (Institutional Suite)</option>
+                <option value="$5,000+ (High Net Worth VIP)">$5,000+ (High Net Worth VIP)</option>
+              </select>
+            </div>
+
+            {/* Field 5: Selected VIP Access Plan */}
+            <div className="space-y-1 text-left">
+              <label className="text-[10px] font-bold text-slate-300 uppercase tracking-wider pl-0.5">
+                5. Selected VIP Access Plan
+              </label>
+              <select
+                value={studentPlan}
+                onChange={(e) => setStudentPlan(e.target.value)}
+                className="w-full bg-[#060c18] border border-slate-800 text-cyan-300 font-semibold px-3 py-2 rounded-xl text-xs focus:outline-none focus:border-cyan-500 transition-colors"
+              >
+                <option value="Lifetime VIP Access ($247) — Never Pay Again">Lifetime VIP Access ($247) — ⭐ Most Popular</option>
+                <option value="1 Year VIP Full Access ($197)">1 Year VIP Full Access ($197)</option>
+                <option value="6 Months VIP Full Access ($147)">6 Months VIP Full Access ($147)</option>
+                <option value="3 Months VIP Full Access ($97)">3 Months VIP Full Access ($97)</option>
+                <option value="1 Month VIP Full Access ($47)">1 Month VIP Full Access ($47)</option>
+                <option value="Pocket Option Deposit Verification ($50 / $100 / $200)">Pocket Option Deposit Access ($50/$100/$200)</option>
+              </select>
+            </div>
+
+            {/* Hardware Lock Binding Notice */}
+            <div className="flex items-center justify-between px-2.5 py-1.5 bg-[#060c18] border border-slate-800/80 rounded-xl text-[9px] text-slate-400">
+              <span className="flex items-center gap-1 font-mono text-slate-300">
+                <ShieldCheck className="w-3 h-3 text-cyan-400" />
+                Hardware Anti-Piracy Bound
+              </span>
+              <span className="font-mono text-cyan-400 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">
+                {shortDeviceId}
+              </span>
             </div>
 
             {/* Submit Application Button */}
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-black text-sm py-3.5 px-4 rounded-xl shadow-lg shadow-cyan-600/30 transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-60 cursor-pointer mt-2"
+              className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-black text-xs py-3 px-4 rounded-xl shadow-lg shadow-cyan-600/25 transition-all active:scale-[0.98] flex items-center justify-center gap-1.5 disabled:opacity-60 cursor-pointer mt-1"
             >
               {isLoading ? (
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
               ) : (
-                <span>Request VIP Access Key</span>
+                <>
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Submit Application & Request VIP Key</span>
+                </>
               )}
             </button>
           </form>
@@ -452,37 +516,72 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
 
             <div>
               <span className="text-[9px] font-mono uppercase bg-amber-500/15 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full font-bold">
-                ⏳ Pending Desk Approval
+                ⏳ Pending Verification by Saify Khan
               </span>
               <h3 className="text-xs font-black text-white mt-1.5">
-                Application Received!
+                VIP Access Application Registered!
               </h3>
-              <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">
-                Applicant: <span className="text-slate-200 font-bold">{submittedApp.name}</span> {submittedApp.traderId ? `(ID: ${submittedApp.traderId})` : ''}
-              </p>
-              <p className="text-[9px] text-slate-500 font-mono mt-0.5">
-                Device Lock: {shortDeviceId}
+              <p className="text-[10px] text-slate-400 mt-0.5 leading-relaxed">
+                Applicant: <span className="text-slate-200 font-bold">{submittedApp.name}</span>
               </p>
             </div>
 
-            <div className="bg-slate-950/70 border border-slate-800 p-2.5 rounded-xl text-left text-[10px] text-slate-300 space-y-1 leading-relaxed">
-              <div className="flex items-center gap-1.5 text-cyan-300 font-bold">
-                <Sparkles className="w-3 h-3" />
-                <span>Next Step to Unlock:</span>
+            {/* Application Summary Box */}
+            <div className="bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl text-left text-[10px] text-slate-300 space-y-1.5 font-mono">
+              <div className="flex justify-between border-b border-slate-800/80 pb-1">
+                <span className="text-slate-500">Contact:</span>
+                <span className="text-white font-bold">{submittedApp.contact}</span>
               </div>
+              <div className="flex justify-between border-b border-slate-800/80 pb-1">
+                <span className="text-slate-500">Broker & UID:</span>
+                <span className="text-cyan-300">{submittedApp.broker || 'Pocket Option'} {submittedApp.traderId ? `(#${submittedApp.traderId})` : ''}</span>
+              </div>
+              <div className="flex justify-between border-b border-slate-800/80 pb-1">
+                <span className="text-slate-500">Trading Capital:</span>
+                <span className="text-emerald-400 font-bold">{submittedApp.capital || '$100 - $500'}</span>
+              </div>
+              <div className="flex justify-between border-b border-slate-800/80 pb-1">
+                <span className="text-slate-500">Selected Plan:</span>
+                <span className="text-amber-300 font-bold">{submittedApp.plan || 'Lifetime VIP ($247)'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Hardware Lock:</span>
+                <span className="text-slate-300">{shortDeviceId}</span>
+              </div>
+            </div>
+
+            <div className="bg-cyan-950/30 border border-cyan-500/25 p-2 rounded-xl text-left text-[10px] text-cyan-200 space-y-0.5 leading-relaxed">
+              <p className="font-bold text-cyan-300 flex items-center gap-1">
+                <Sparkles className="w-3 h-3 text-cyan-400" />
+                Final Step to Receive Your 7-Digit Key:
+              </p>
               <p className="text-slate-400 text-[9.5px]">
-                To expedite your verification and receive your ATM access key, message our Support Desk on Telegram:
+                Forward your official application ticket directly to Saify Khan on Telegram to issue your key:
               </p>
             </div>
 
-            {/* Telegram Direct Action Button */}
+            {/* Telegram Direct to Saify Khan Action Button */}
             <button
               type="button"
-              onClick={() => openTelegramSupport(`Hi Support Desk, I submitted my registration for Aladdin Trade Manager. Name: ${submittedApp.name}${submittedApp.traderId ? `, Trader ID: ${submittedApp.traderId}` : ''}. Please approve my access key.`)}
-              className="w-full py-2.5 px-3 rounded-xl text-xs font-bold bg-[#229ED9] hover:bg-[#1E8BC0] text-white shadow-md shadow-[#229ED9]/25 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              onClick={() => {
+                const applicationMsg = `🌟 ALADDIN TRADE MANAGER™ — VIP ACCESS APPLICATION 🌟
+══════════════════════════════════
+👤 Trader Name: ${submittedApp.name}
+📱 Contact: ${submittedApp.contact}
+🏛️ Broker: ${submittedApp.broker || 'Pocket Option'} (UID: ${submittedApp.traderId || 'Pending Verification'})
+💰 Trading Capital: ${submittedApp.capital || '$100 - $500'}
+🎯 Selected Plan: ${submittedApp.plan || 'Lifetime VIP Access ($247)'}
+🛡️ Hardware Signature: ${submittedApp.deviceName || getDeviceHumanName()} [${shortDeviceId}]
+🆔 Application ID: ${submittedApp.id}
+══════════════════════════════════
+Hello Master Admin Saify Khan,
+I have submitted my official application for Aladdin Trade Manager. Please review my details and issue my 7-digit VIP access key.`;
+                openSaifyKhanTelegram(applicationMsg);
+              }}
+              className="w-full py-2.5 px-3 rounded-xl text-xs font-bold bg-[#229ED9] hover:bg-[#1E8BC0] text-white shadow-md shadow-[#229ED9]/25 transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
             >
               <Send className="w-3.5 h-3.5" />
-              <span>Contact Support Desk</span>
+              <span>Send Application to Saify Khan on Telegram</span>
             </button>
 
             {/* Return to Enter Key Button */}
@@ -493,9 +592,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                 setActiveTab("key");
                 setError("");
               }}
-              className="text-[10px] text-slate-400 hover:text-emerald-400 transition-colors cursor-pointer underline"
+              className="text-[10px] text-slate-400 hover:text-emerald-400 transition-colors cursor-pointer underline block w-full text-center pt-1"
             >
-              I Received My ATM Key → Enter Portal
+              Already Received My 7-Digit Key? Enter Access Pass →
             </button>
           </div>
         )}

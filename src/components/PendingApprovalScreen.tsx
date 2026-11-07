@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import { Clock, LogOut, MessageCircle, KeyRound, ArrowRight, ShieldCheck, AlertCircle, CheckCircle2 } from "lucide-react";
 import { SupportModal } from "./SupportModal";
-import { validateLicenseCode, saveActiveSession } from "../lib/licenseEngine";
-import { openTelegramSupport } from "../lib/telegram";
+import { validateLicenseCode, verifyLicenseKeyOnline, saveActiveSession } from "../lib/licenseEngine";
+import { openTelegramSupport, openSaifyKhanTelegram } from "../lib/telegram";
 
 interface PendingApprovalScreenProps {
   user?: any;
@@ -21,7 +21,7 @@ export const PendingApprovalScreen: React.FC<PendingApprovalScreenProps> = ({
   const [isActivating, setIsActivating] = useState(false);
   const selectedPlan = typeof window !== 'undefined' ? (localStorage.getItem('atm_selected_plan') || '') : '';
 
-  const handleActivateWithKey = (e: React.FormEvent) => {
+  const handleActivateWithKey = async (e: React.FormEvent) => {
     e.preventDefault();
     setActivationError(null);
     const clean = keyCode.trim().toUpperCase().replace(/^ATM[-_\s]?/, '').replace(/[^A-Z0-9]/g, '');
@@ -38,9 +38,9 @@ export const PendingApprovalScreen: React.FC<PendingApprovalScreenProps> = ({
 
     setIsActivating(true);
     try {
-      const res = validateLicenseCode(`ATM-${clean}`);
+      const res = await verifyLicenseKeyOnline(`ATM-${clean}`);
       if (!res.valid || !res.license) {
-        setActivationError(res.reason || "Invalid Access Key. Please contact Master Admin.");
+        setActivationError(res.reason || "Invalid Access Key. Please contact Master Admin (@thevivankhan).");
         return;
       }
 

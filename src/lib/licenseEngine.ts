@@ -39,8 +39,10 @@ export interface StudentApplication {
   id: string;
   name: string;
   email?: string;
-  contact: string; // WhatsApp or Phone number
-  traderId?: string; // Pocket Option / Broker UID (optional)
+  contact: string; // WhatsApp or Telegram username or phone
+  broker?: string; // Broker Name (Pocket Option, Quotex, etc.)
+  traderId?: string; // Broker Trader ID / UID (optional)
+  capital?: string; // Trading Capital Range
   deviceId: string;
   deviceName?: string;
   submittedAt: number;
@@ -48,7 +50,7 @@ export interface StudentApplication {
   isArchived?: boolean;
   archivedAt?: number;
   issuedKey?: string;
-  plan?: LicenseKey['plan'];
+  plan?: string;
   adminNotes?: string;
 }
 
@@ -92,6 +94,10 @@ const generate1000CircularPool = (): string[] => {
 };
 
 export const CIRCULAR_POOL_1000: string[] = generate1000CircularPool();
+
+export const VAULT_CLEAN_KEYS_SET: Set<string> = new Set(
+  CIRCULAR_POOL_1000.map((k) => k.replace(/^ATM[-_\s]?/, '').toUpperCase().slice(0, 7))
+);
 
 /**
  * Loads issued licenses from localStorage and syncs with backend if reachable.
@@ -237,7 +243,10 @@ export const submitStudentApplication = (
   name: string,
   contact: string,
   traderId?: string,
-  email?: string
+  email?: string,
+  broker?: string,
+  capital?: string,
+  plan?: string
 ): StudentApplication => {
   const deviceId = getClientDeviceId();
   const deviceName = getDeviceHumanName();
@@ -247,7 +256,10 @@ export const submitStudentApplication = (
     name: name.trim(),
     email: email ? email.trim() : undefined,
     contact: contact.trim(),
+    broker: broker ? broker.trim() : 'Pocket Option',
     traderId: traderId ? traderId.trim() : undefined,
+    capital: capital ? capital.trim() : '$100 - $500',
+    plan: plan ? plan.trim() : 'Lifetime VIP ($247)',
     deviceId,
     deviceName,
     submittedAt: Date.now(),
@@ -409,19 +421,37 @@ export const getClientDeviceId = (): string => {
   }
 };
 
-export const resetLicenseDeviceLock = (licenseId: string): boolean => {
+export const resetLicenseDeviceLock = async (licenseId: string): Promise<boolean> => {
   const licenses = getIssuedLicenses();
   const idx = licenses.findIndex((l) => l.id === licenseId || l.key === licenseId || l.cleanKey === licenseId);
-  if (idx === -1) return false;
+  let cleanKey = '';
+  if (idx !== -1) {
+    cleanKey = licenses[idx].cleanKey;
+    licenses[idx] = {
+      ...licenses[idx],
+      boundDeviceId: undefined,
+      boundDeviceName: undefined,
+      boundAt: undefined,
+    };
+    saveIssuedLicenses(licenses);
+  } else {
+    cleanKey = licenseId.replace(/^ATM[-_\s]?/, '').toUpperCase().slice(0, 7);
+  }
 
-  licenses[idx] = {
-    ...licenses[idx],
-    boundDeviceId: undefined,
-    boundDeviceName: undefined,
-    boundAt: undefined,
-  };
+  if (cleanKey) {
+    try {
+      localStorage.removeItem(`atm_device_lock_${cleanKey}`);
+    } catch {}
 
-  saveIssuedLicenses(licenses);
+    try {
+      await fetch('/api/admin/reset-device-lock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: cleanKey, licenseId }),
+      });
+    } catch {}
+  }
+
   return true;
 };
 
@@ -518,21 +548,40 @@ export const validateLicenseCode = (input: string): ValidationResult => {
     };
   }
 
-  // 3. Check Issued Licenses
+  // 3. Check Issued Licenses OR 1,000 Deterministic Circular Vault Pool
   const licenses = getIssuedLicenses();
-  const foundIdx = licenses.findIndex(
+  let foundIdx = licenses.findIndex(
     (l) =>
       l.cleanKey === stripped ||
       l.key.toUpperCase() === normalizedFull ||
       l.key.replace(/[^A-Za-z0-9]/g, '').toUpperCase() === trimmed.replace(/[^A-Za-z0-9]/g, '').toUpperCase()
   );
 
-  if (foundIdx === -1) {
+  const isInVault = VAULT_CLEAN_KEYS_SET.has(stripped);
+
+  if (foundIdx === -1 && !isInVault) {
     return {
       valid: false,
       role: 'user',
-      reason: 'Invalid License Key. Please enter a valid 7-character ATM Key.',
+      reason: 'Invalid License Key. Please enter a valid 7-character ATM Key or request access from Master Admin (@thevivankhan).',
     };
+  }
+
+  // If key belongs to circular pool but was not pre-issued on this device, bootstrap it now!
+  if (foundIdx === -1 && isInVault) {
+    const vaultLicense: LicenseKey = {
+      id: `lic-vault-${Date.now()}-${stripped}`,
+      key: `ATM-${stripped}`,
+      cleanKey: stripped,
+      traderName: 'VIP Trader',
+      plan: 'Lifetime VIP ($247)',
+      issuedAt: Date.now(),
+      expiresAt: null, // Lifetime VIP
+      status: 'active',
+    };
+    licenses.unshift(vaultLicense);
+    saveIssuedLicenses(licenses);
+    foundIdx = 0;
   }
 
   const found = licenses[foundIdx];
@@ -557,21 +606,40 @@ export const validateLicenseCode = (input: string): ValidationResult => {
     };
   }
 
-  // 4. ONE CODE = ONE DEVICE LOCK (Hardware Anti-Piracy)
+  // 4. ONE CODE = ONE DEVICE LOCK (Hardware Anti-Piracy Guard)
   const currentDeviceId = getClientDeviceId();
-  if (!found.boundDeviceId) {
+  const currentDeviceName = getDeviceHumanName();
+
+  const localLockKey = `atm_device_lock_${stripped}`;
+  let deviceLockData: { deviceId: string; deviceName: string; boundAt: number } | null = null;
+  try {
+    const rawLock = localStorage.getItem(localLockKey);
+    if (rawLock) deviceLockData = JSON.parse(rawLock);
+  } catch {}
+
+  const boundId = found.boundDeviceId || deviceLockData?.deviceId;
+  const boundName = found.boundDeviceName || deviceLockData?.deviceName || 'Another Device';
+
+  if (!boundId) {
     // Lock key to this device on first login!
     found.boundDeviceId = currentDeviceId;
     found.boundAt = Date.now();
-    found.boundDeviceName = getDeviceHumanName();
+    found.boundDeviceName = currentDeviceName;
     licenses[foundIdx] = found;
     saveIssuedLicenses(licenses);
-  } else if (found.boundDeviceId !== currentDeviceId) {
+    try {
+      localStorage.setItem(localLockKey, JSON.stringify({
+        deviceId: currentDeviceId,
+        deviceName: currentDeviceName,
+        boundAt: Date.now(),
+      }));
+    } catch {}
+  } else if (boundId !== currentDeviceId) {
     return {
       valid: false,
       role: 'user',
       license: found,
-      reason: '🔒 Device Lock: This code is locked to another device (1 Code = 1 Device Only). Contact Admin to reset.',
+      reason: `🔒 Hardware Security Alert: Key is locked to another device (${boundName}). 1 Key = 1 Device only. Contact Master Admin (@thevivankhan) to reset.`,
     };
   }
 
@@ -581,6 +649,51 @@ export const validateLicenseCode = (input: string): ValidationResult => {
     role: 'user',
     license: found,
   };
+};
+
+/**
+ * Validates a key online with server backend, enforcing cross-device hardware locking
+ * while falling back safely to offline cryptographic validation if server is unreachable.
+ */
+export const verifyLicenseKeyOnline = async (input: string): Promise<ValidationResult> => {
+  const localResult = validateLicenseCode(input);
+  if (!localResult.valid) {
+    return localResult;
+  }
+  if (localResult.role === 'admin') {
+    return localResult;
+  }
+
+  try {
+    const clientDeviceId = getClientDeviceId();
+    const clientDeviceName = getDeviceHumanName();
+    const res = await fetch('/api/auth/verify-license', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        key: input.trim(),
+        deviceId: clientDeviceId,
+        deviceName: clientDeviceName,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      return {
+        valid: false,
+        role: 'user',
+        license: localResult.license,
+        reason: data.message || localResult.reason || 'Authentication failed.',
+      };
+    }
+    return {
+      valid: true,
+      role: 'user',
+      license: data.license || localResult.license,
+    };
+  } catch {
+    // Network offline or standalone environment fallback
+    return localResult;
+  }
 };
 
 /**
@@ -641,24 +754,25 @@ export const generateVipPassText = (license: LicenseKey): string => {
         month: 'short',
         year: 'numeric',
       })
-    : 'LIFETIME VIP UNLIMITED';
+    : 'LIFETIME VIP UNLIMITED (Never Pay Again)';
 
-  return `✨ ALADDIN TRADE MANAGER™ — VIP ACCESS PASS ✨
+  return `✨ ALADDIN TRADE MANAGER™ — OFFICIAL VIP ACCESS PASS ✨
 ══════════════════════════════════
 👤 Trader: ${license.traderName}
 🔑 Cryptographic Key: ${license.key}
-⏳ Plan: ${license.plan}
+⏳ Access Plan: ${license.plan}
 📅 Valid Until: ${expiryFormatted}
-🛡️ Status: ACTIVE & VERIFIED (Single-Device Lock)
+🛡️ Hardware Security: Single-Device Locked (1 Key = 1 Device)
 🌐 Login Portal: https://aladdin.org.in
 ══════════════════════════════════
 ⚠️ How to Activate:
 1. Open https://aladdin.org.in
-2. In the "VIP Access Pass" box, enter your Key: ${license.key}
-3. Click "Unlock Aladdin Trade Manager" to access full institutional suite.
+2. In the "Enter Cryptographic Key" box, enter your Key: ${license.key}
+3. Click "Unlock Aladdin Trade Manager" to launch your institutional workspace.
+* Note: Once logged in, this key locks permanently to your phone/PC for anti-piracy protection.
 
-Official Support: @AladdinAISupport
-© Aladdin AI Organization — All Rights Reserved.`;
+  Master Desk: @thevivankhan
+  © Aladdin AI Organization — All Rights Reserved.`;
 };
 
 export const getTelegramShareUrl = (text: string): string => {

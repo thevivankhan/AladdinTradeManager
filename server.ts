@@ -145,6 +145,51 @@ function saveLicenses() {
   safeWriteJson(licensesPath, licensesData);
 }
 
+// --- 1,000 Deterministic Circular Vault Keys Pool ---
+const generateServerCircularPool = (): string[] => {
+  const pool: string[] = [];
+  const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+  let seed = 0x5a1f1;
+  const nextRand = () => {
+    seed = (seed * 1664525 + 1013904223) % 4294967296;
+    return seed / 4294967296;
+  };
+  const set = new Set<string>();
+  while (pool.length < 1000) {
+    let code = '';
+    for (let j = 0; j < 7; j++) {
+      const idx = Math.floor(nextRand() * chars.length);
+      code += chars[idx];
+    }
+    const fullKey = `ATM-${code}`;
+    if (!set.has(fullKey)) {
+      set.add(fullKey);
+      pool.push(fullKey);
+    }
+  }
+  return pool;
+};
+
+const CIRCULAR_POOL_1000 = generateServerCircularPool();
+const VAULT_CLEAN_SET = new Set(
+  CIRCULAR_POOL_1000.map((k) => k.replace(/^ATM[-_\s]?/, '').toUpperCase().slice(0, 7))
+);
+
+// --- Hardware Device Locks Store (1 Key = 1 Device Anti-Piracy) ---
+const deviceLocksPath = path.join(__dirname, 'device_locks.json');
+let deviceLocks: Record<string, { deviceId: string; deviceName: string; boundAt: number; key: string }> = {};
+try {
+  if (fs.existsSync(deviceLocksPath)) {
+    deviceLocks = JSON.parse(fs.readFileSync(deviceLocksPath, 'utf8'));
+  }
+} catch {
+  deviceLocks = {};
+}
+
+function saveDeviceLocks() {
+  safeWriteJson(deviceLocksPath, deviceLocks);
+}
+
 // --- Proprietary Standalone Auth API Routes (Zero Firebase Auth Dependency) ---
 
 // 1. Verify License & Issue Signed Session Token with 1 Code = 1 Device hardware binding
@@ -166,16 +211,37 @@ app.post('/api/auth/verify-license', (req, res) => {
       });
     }
 
+    // 1. Check if key is known in issued licenses OR in the 1,000 deterministic crypto vault
     const licenses = licensesData.licenses || [];
-    const foundIdx = licenses.findIndex(
+    let foundIdx = licenses.findIndex(
       (l: any) => l.cleanKey === clean || l.key === normalized || l.key === key.trim().toUpperCase()
     );
 
-    if (foundIdx === -1) {
+    const isInVault = VAULT_CLEAN_SET.has(clean);
+
+    if (foundIdx === -1 && !isInVault) {
       return res.status(404).json({
         success: false,
-        message: 'Invalid 7-digit ATM Key. Please verify or contact Admin for a valid pass.'
+        message: 'Invalid 7-digit ATM Key. Please verify or contact Master Admin (@thevivankhan) for a valid pass.'
       });
+    }
+
+    // If key belongs to the 1000 cryptographic pool but wasn't pre-recorded, bootstrap it now!
+    if (foundIdx === -1 && isInVault) {
+      const newVaultLic = {
+        id: `lic-vault-${Date.now()}-${clean}`,
+        key: normalized,
+        cleanKey: clean,
+        traderName: 'VIP Trader',
+        plan: 'Lifetime VIP ($247)',
+        issuedAt: Date.now(),
+        expiresAt: null,
+        status: 'active',
+      };
+      licenses.unshift(newVaultLic);
+      licensesData.licenses = licenses;
+      saveLicenses();
+      foundIdx = 0;
     }
 
     const license = licenses[foundIdx];
@@ -194,18 +260,39 @@ app.post('/api/auth/verify-license', (req, res) => {
       });
     }
 
-    // 1 Code = 1 Device hardware lock
+    // 2. Strict 1 Key = 1 Device Hardware Anti-Piracy Guard
     const clientDevId = (deviceId || '').trim() || 'dev_unknown';
-    if (!license.boundDeviceId) {
+    const clientDevName = deviceName || 'Trader Mobile';
+
+    // Check central deviceLocks store
+    const existingLock = deviceLocks[clean] || (license.boundDeviceId ? {
+      deviceId: license.boundDeviceId,
+      deviceName: license.boundDeviceName || 'Previous Device',
+      boundAt: license.boundAt || Date.now(),
+      key: clean,
+    } : null);
+
+    if (!existingLock || !existingLock.deviceId) {
+      // First use: Lock key permanently to this device!
+      const newLock = {
+        deviceId: clientDevId,
+        deviceName: clientDevName,
+        boundAt: Date.now(),
+        key: clean,
+      };
+      deviceLocks[clean] = newLock;
+      saveDeviceLocks();
+
       license.boundDeviceId = clientDevId;
-      license.boundDeviceName = deviceName || 'Student Device';
+      license.boundDeviceName = clientDevName;
       license.boundAt = Date.now();
       licenses[foundIdx] = license;
       saveLicenses();
-    } else if (license.boundDeviceId !== clientDevId) {
+    } else if (existingLock.deviceId !== clientDevId) {
+      // Hardware mismatch alert!
       return res.status(403).json({
         success: false,
-        message: '🔒 Device Lock: This code is locked to another device (1 Code = 1 Device Only). Contact Admin to reset.'
+        message: `🔒 Hardware Security Alert: Key is locked to another device (${existingLock.deviceName}). 1 Key = 1 Device only. Contact Master Admin (@thevivankhan) to reset.`
       });
     }
 
@@ -236,6 +323,35 @@ app.post('/api/auth/verify-license', (req, res) => {
     });
   } catch (err: any) {
     res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Admin Reset Device Lock Endpoint
+app.post('/api/admin/reset-device-lock', (req, res) => {
+  try {
+    const { key, licenseId } = req.body;
+    const clean = (key || '').toUpperCase().replace(/^ATM[-_\s]?/, '').replace(/[^A-Z0-9]/g, '').slice(0, 7);
+    
+    // Clear in central deviceLocks
+    if (clean && deviceLocks[clean]) {
+      delete deviceLocks[clean];
+      saveDeviceLocks();
+    }
+
+    // Clear in licensesData
+    const licenses = licensesData.licenses || [];
+    const idx = licenses.findIndex((l: any) => l.cleanKey === clean || l.id === licenseId || l.key === key);
+    if (idx !== -1) {
+      licenses[idx].boundDeviceId = null;
+      licenses[idx].boundDeviceName = null;
+      licenses[idx].boundAt = null;
+      saveLicenses();
+      return res.json({ success: true, message: 'Device lock successfully cleared.', license: licenses[idx] });
+    }
+
+    res.json({ success: true, message: 'Device lock successfully cleared.' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
