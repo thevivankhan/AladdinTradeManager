@@ -127,7 +127,7 @@ export const PendingApprovalScreen: React.FC<PendingApprovalScreenProps> = ({
               <input
                 type="text"
                 maxLength={7}
-                placeholder="e.g. C3X••••"
+                placeholder="e.g. 7-Digit Key"
                 value={keyCode}
                 onChange={(e) => {
                   setKeyCode(e.target.value.toUpperCase());

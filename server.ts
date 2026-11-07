@@ -60,7 +60,8 @@ export const MASTER_ADMIN_EMAILS = [
   'thevivankhan@gmail.com',
   'ololootc@gmail.com',
   'thealphafxpro@gmail.com',
-  'ololouniversity@gmail.com'
+  'ololouniversity@gmail.com',
+  'ololobillionaireclub@gmail.com'
 ];
 
 function signSessionToken(payload: Record<string, any>): string {

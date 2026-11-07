@@ -29,7 +29,8 @@ export const MASTER_ADMIN_EMAILS = [
   'thevivankhan@gmail.com',
   'ololootc@gmail.com',
   'thealphafxpro@gmail.com',
-  'ololouniversity@gmail.com'
+  'ololouniversity@gmail.com',
+  'ololobillionaireclub@gmail.com'
 ];
 
 export const MASTER_ADMIN_KEYS: string[] = []; // Deprecated: no backdoor guessable codes allowed

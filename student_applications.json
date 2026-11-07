@@ -7,6 +7,8 @@
     "deviceId": "dev_jacn30zmw4xjuf5",
     "deviceName": "Mobile Device",
     "submittedAt": 1793967024609,
-    "status": "pending"
+    "status": "approved",
+    "issuedKey": "ATM-M4YR99Z",
+    "plan": "1 Month ($47)"
   }
 ]
