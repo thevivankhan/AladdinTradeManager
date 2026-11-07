@@ -44,7 +44,9 @@ export interface StudentApplication {
   deviceId: string;
   deviceName?: string;
   submittedAt: number;
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'pending' | 'approved' | 'rejected' | 'archived';
+  isArchived?: boolean;
+  archivedAt?: number;
   issuedKey?: string;
   plan?: LicenseKey['plan'];
   adminNotes?: string;
@@ -315,6 +317,60 @@ export const rejectStudentApplication = (appId: string): boolean => {
 
   apps[idx] = { ...apps[idx], status: 'rejected' };
   saveStudentApplications(apps);
+  return true;
+};
+
+export const archiveStudentApplication = (appId: string): boolean => {
+  const apps = getStudentApplications();
+  const idx = apps.findIndex((a) => a.id === appId);
+  if (idx === -1) return false;
+
+  apps[idx] = {
+    ...apps[idx],
+    isArchived: true,
+    archivedAt: Date.now(),
+  };
+  saveStudentApplications(apps);
+
+  fetch('/api/student-applications/archive', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ appId }),
+  }).catch(() => {});
+
+  return true;
+};
+
+export const restoreStudentApplication = (appId: string): boolean => {
+  const apps = getStudentApplications();
+  const idx = apps.findIndex((a) => a.id === appId);
+  if (idx === -1) return false;
+
+  apps[idx] = {
+    ...apps[idx],
+    isArchived: false,
+    archivedAt: undefined,
+  };
+  saveStudentApplications(apps);
+
+  fetch('/api/student-applications/restore', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ appId }),
+  }).catch(() => {});
+
+  return true;
+};
+
+export const deleteStudentApplicationPermanently = (appId: string): boolean => {
+  const apps = getStudentApplications();
+  const filtered = apps.filter((a) => a.id !== appId);
+  saveStudentApplications(filtered);
+
+  fetch(`/api/student-applications/${appId}`, {
+    method: 'DELETE',
+  }).catch(() => {});
+
   return true;
 };
 

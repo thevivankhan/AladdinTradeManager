@@ -410,6 +410,53 @@ app.post('/api/student-applications/approve', (req, res) => {
   }
 });
 
+app.post('/api/student-applications/archive', (req, res) => {
+  try {
+    const { appId } = req.body;
+    const idx = studentApplications.findIndex((a: any) => a.id === appId);
+    if (idx !== -1) {
+      studentApplications[idx] = {
+        ...studentApplications[idx],
+        isArchived: true,
+        archivedAt: Date.now(),
+      };
+      saveStudentApps();
+    }
+    res.json({ success: true, applications: studentApplications });
+  } catch (err) {
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
+app.post('/api/student-applications/restore', (req, res) => {
+  try {
+    const { appId } = req.body;
+    const idx = studentApplications.findIndex((a: any) => a.id === appId);
+    if (idx !== -1) {
+      studentApplications[idx] = {
+        ...studentApplications[idx],
+        isArchived: false,
+        archivedAt: undefined,
+      };
+      saveStudentApps();
+    }
+    res.json({ success: true, applications: studentApplications });
+  } catch (err) {
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
+app.delete('/api/student-applications/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    studentApplications = studentApplications.filter((a: any) => a.id !== id);
+    saveStudentApps();
+    res.json({ success: true, applications: studentApplications });
+  } catch (err) {
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
 
 
 // --- Pocket Option Real-time Postback Webhook & Trader ID Verification ---

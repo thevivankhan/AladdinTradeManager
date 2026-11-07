@@ -5,7 +5,7 @@ import {
   Users, Key, Search, Shield, Copy, RefreshCw, Wrench,
   Smartphone, Monitor, Trash2, Power, PowerOff, Download, UserPlus,
   Image as ImageIcon, X, Eye, EyeOff, ShieldOff, Activity, Mail,
-  Send, MessageCircle, Sparkles, Check, UserCheck
+  Send, MessageCircle, Sparkles, Check, UserCheck, Archive, RotateCcw, Bell
 } from "lucide-react";
 import {
   getIssuedLicenses,
@@ -21,7 +21,10 @@ import {
   StudentApplication,
   getStudentApplications,
   approveStudentApplication,
-  rejectStudentApplication
+  rejectStudentApplication,
+  archiveStudentApplication,
+  restoreStudentApplication,
+  deleteStudentApplicationPermanently
 } from '../lib/licenseEngine';
 
 const logout = () => { 
@@ -62,29 +65,82 @@ export const AdminPanel = ({
   const [lastIssuedLicense, setLastIssuedLicense] = useState<LicenseKey | null>(null);
   const [vaultSearchQuery, setVaultSearchQuery] = useState("");
   const [copiedKeyId, setCopiedKeyId] = useState<string | null>(null);
+  const [appSubFilter, setAppSubFilter] = useState<"active" | "trash">("active");
+  const [newAppAlert, setNewAppAlert] = useState<string | null>(null);
+  const prevPendingRef = React.useRef<number | null>(null);
 
+  const playStudentAlertSound = () => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const now = ctx.currentTime;
+      
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = "sine";
+      osc1.frequency.setValueAtTime(587.33, now); // D5
+      osc1.frequency.exponentialRampToValueAtTime(880, now + 0.15); // A5
+      gain1.gain.setValueAtTime(0.3, now);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.55);
 
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = "sine";
+      osc2.frequency.setValueAtTime(880, now + 0.12);
+      osc2.frequency.exponentialRampToValueAtTime(1174.66, now + 0.32); // D6
+      gain2.gain.setValueAtTime(0.25, now + 0.12);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.75);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(now + 0.12);
+      osc2.stop(now + 0.75);
+    } catch {}
+  };
 
   // Pocket Option Trader IDs Whitelist State
   const [verifiedTraderIds, setVerifiedTraderIds] = useState<string[]>([]);
   const [newTraderIdInput, setNewTraderIdInput] = useState("");
   const [isUpdatingTraderIds, setIsUpdatingTraderIds] = useState(false);
 
-  const refreshStudentApps = () => {
-    setStudentApps(getStudentApplications());
+  const refreshStudentApps = (triggerSound = false) => {
     fetch('/api/student-applications')
       .then(res => res.json())
       .then(data => {
         if (data && Array.isArray(data.applications)) {
           setStudentApps(data.applications);
+          const activePending = data.applications.filter((a: any) => a.status === 'pending' && !a.isArchived).length;
+          if (triggerSound && prevPendingRef.current !== null && activePending > prevPendingRef.current) {
+            playStudentAlertSound();
+            const latest = data.applications.find((a: any) => a.status === 'pending' && !a.isArchived);
+            if (latest) {
+              setNewAppAlert(`🔔 New Student Registration: ${latest.name} (${latest.deviceName || 'Mobile Device'})!`);
+              setTimeout(() => setNewAppAlert(null), 8000);
+            }
+          }
+          prevPendingRef.current = activePending;
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        const local = getStudentApplications();
+        setStudentApps(local);
+        const activePending = local.filter((a: any) => a.status === 'pending' && !a.isArchived).length;
+        prevPendingRef.current = activePending;
+      });
   };
 
   useEffect(() => {
     setVaultLicenses(getIssuedLicenses());
-    refreshStudentApps();
+    refreshStudentApps(false);
+
+    // Live sync polling every 6 seconds so incoming registrations alert admin automatically
+    const pollTimer = setInterval(() => {
+      refreshStudentApps(true);
+    }, 6000);
 
     fetch('/api/admin/trader-ids')
       .then((res) => res.json())
@@ -94,6 +150,8 @@ export const AdminPanel = ({
         }
       })
       .catch(() => {});
+
+    return () => clearInterval(pollTimer);
   }, []);
 
   const handleAddTraderId = async (e: React.FormEvent) => {
@@ -1192,9 +1250,9 @@ export const AdminPanel = ({
             }`}
           >
             <UserCheck className="w-3.5 h-3.5" /> 📝 Student Applications
-            {studentApps.filter(a => a.status === 'pending').length > 0 && (
+            {studentApps.filter(a => a.status === 'pending' && !a.isArchived).length > 0 && (
               <span className="bg-rose-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold ml-1 animate-pulse">
-                {studentApps.filter(a => a.status === 'pending').length}
+                {studentApps.filter(a => a.status === 'pending' && !a.isArchived).length}
               </span>
             )}
           </button>
@@ -1306,218 +1364,361 @@ export const AdminPanel = ({
         <div className="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden shadow-2xl">
           
           {/* TAB: STUDENT APPLICATIONS */}
-          {activeTab === "studentApps" && (
-            <div className="p-4 sm:p-6 space-y-6">
-              {/* Header Banner */}
-              <div className="bg-gradient-to-r from-cyan-500/15 via-slate-900 to-slate-900 border border-cyan-500/30 rounded-2xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="px-2.5 py-0.5 rounded-full bg-cyan-400 text-slate-950 font-black text-[10px] tracking-wider uppercase">
-                      STUDENT ACCESS QUEUE
-                    </span>
-                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-bold text-[10px] border border-emerald-500/20">
-                      LIVE SIGN-UP DESK
-                    </span>
-                  </div>
-                  <h2 className="text-xl sm:text-2xl font-black text-white flex items-center gap-2">
-                    <UserCheck className="w-6 h-6 text-cyan-400" /> Incoming Student Applications
-                  </h2>
-                  <p className="text-xs text-slate-400 max-w-xl">
-                    Review students who registered on the login portal. Verify application details and issue a non-repeating cryptographic key (ATM-XXXXXXX) with 1 click.
-                  </p>
-                </div>
+          {activeTab === "studentApps" && (() => {
+            const activeApps = studentApps.filter(a => !a.isArchived && a.status !== 'archived');
+            const trashApps = studentApps.filter(a => a.isArchived || a.status === 'archived');
+            const displayedApps = appSubFilter === 'active' ? activeApps : trashApps;
+            const pendingActiveCount = activeApps.filter(a => a.status === 'pending').length;
 
-                <div className="flex items-center gap-2 bg-slate-950/80 border border-slate-800 rounded-xl p-3">
-                  <div className="text-right">
-                    <p className="text-[10px] uppercase font-bold text-slate-400">Pending Review</p>
-                    <p className="text-xl font-black text-cyan-400">
-                      {studentApps.filter(a => a.status === 'pending').length} Requests
-                    </p>
-                  </div>
-                  <button
-                    onClick={refreshStudentApps}
-                    className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all cursor-pointer"
-                    title="Refresh List"
-                  >
-                    <RefreshCw className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Applications List */}
-              <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 shadow-xl">
-                <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
-                  <h3 className="font-bold text-white text-sm flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-cyan-400" /> All Registrations ({studentApps.length})
-                  </h3>
-                  <span className="text-xs text-slate-400">
-                    Total: {studentApps.length} | Pending: {studentApps.filter(a => a.status === 'pending').length}
-                  </span>
-                </div>
-
-                {studentApps.length === 0 ? (
-                  <div className="py-12 text-center text-slate-500 text-xs">
-                    No student applications yet. When a new user registers on the Sign-Up tab, their request will appear here.
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {studentApps.map((app) => {
-                      const isPending = app.status === 'pending';
-                      const isApproved = app.status === 'approved';
-
-                      return (
-                        <div
-                          key={app.id}
-                          className={`p-4 rounded-xl border transition-all ${
-                            isPending
-                              ? "bg-slate-900/90 border-cyan-500/40 shadow-lg shadow-cyan-950/20"
-                              : isApproved
-                              ? "bg-slate-950/70 border-emerald-500/25 opacity-90"
-                              : "bg-slate-950/40 border-slate-800 opacity-60"
-                          }`}
-                        >
-                          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-                            {/* Applicant Info */}
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-bold text-white text-sm">
-                                  {app.name}
-                                </span>
-                                <span
-                                  className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                                    isPending
-                                      ? "bg-amber-400/20 text-amber-300 border border-amber-400/30 animate-pulse"
-                                      : isApproved
-                                      ? "bg-emerald-400/20 text-emerald-300 border border-emerald-400/30"
-                                      : "bg-rose-400/20 text-rose-300 border border-rose-400/30"
-                                  }`}
-                                >
-                                  {app.status}
-                                </span>
-                                <span className="text-[10px] text-slate-500 font-mono">
-                                  {new Date(app.submittedAt).toLocaleString()}
-                                </span>
-                              </div>
-
-                              <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400 pt-0.5">
-                                {app.email && (
-                                  <span className="flex items-center gap-1 text-slate-300">
-                                    ✉️ Email: <strong className="text-white font-mono">{app.email}</strong>
-                                  </span>
-                                )}
-                                <span className="flex items-center gap-1 text-slate-300">
-                                  📱 Phone: <strong className="text-white font-mono">{app.contact}</strong>
-                                </span>
-                                <span className="flex items-center gap-1 text-cyan-300">
-                                  🆔 Pocket Option UID: <strong className="text-cyan-200 font-mono">{app.traderId || "None (Direct Member)"}</strong>
-                                </span>
-                                <span className="flex items-center gap-1 text-slate-300 text-xs">
-                                  💻 Device: <strong className="text-cyan-300 font-semibold">{app.deviceName || app.deviceId}</strong>
-                                </span>
-                              </div>
-
-                              {isApproved && app.issuedKey && (
-                                <div className="mt-2 flex items-center gap-2 p-2 rounded-lg bg-emerald-950/40 border border-emerald-500/30 text-xs">
-                                  <Key className="w-3.5 h-3.5 text-emerald-400" />
-                                  <span className="text-slate-300">Issued Key:</span>
-                                  <strong className="text-emerald-300 font-mono text-sm tracking-wider">
-                                    {app.issuedKey}
-                                  </strong>
-                                  <span className="text-[10px] text-slate-400 font-medium">({app.plan})</span>
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Actions */}
-                            <div className="flex items-center gap-2 shrink-0">
-                              {isPending && (
-                                <>
-                                  <select
-                                    id={`plan-${app.id}`}
-                                    defaultValue="1 Month ($47)"
-                                    className="bg-slate-950 border border-slate-700 text-white text-xs px-2.5 py-1.5 rounded-lg focus:outline-none focus:border-cyan-500"
-                                  >
-                                    <option value="1 Month ($47)">1 Month ($47)</option>
-                                    <option value="3 Months ($97)">3 Months ($97)</option>
-                                    <option value="6 Months ($147)">6 Months ($147)</option>
-                                    <option value="1 Year ($197)">1 Year ($197)</option>
-                                    <option value="Lifetime VIP ($247)">Lifetime VIP ($247)</option>
-                                  </select>
-
-                                  <button
-                                    onClick={() => {
-                                      const select = document.getElementById(`plan-${app.id}`) as HTMLSelectElement;
-                                      const chosenPlan = (select?.value || "1 Month ($47)") as LicenseKey['plan'];
-                                      const result = approveStudentApplication(app.id, chosenPlan);
-                                      if (result) {
-                                        refreshStudentApps();
-                                        setVaultLicenses(getIssuedLicenses());
-                                        const text = generateVipPassText(result.license);
-                                        navigator.clipboard.writeText(text);
-                                        alert(`✅ Approved!\nIssued Key: ${result.license.key}\nVIP Access Pass copied to clipboard for Telegram!`);
-                                      }
-                                    }}
-                                    className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 shadow-md shadow-emerald-500/20 cursor-pointer"
-                                  >
-                                    <Check className="w-3.5 h-3.5" />
-                                    <span>Approve & Issue ATM-Key</span>
-                                  </button>
-
-                                  <button
-                                    onClick={() => {
-                                      if (confirm(`Reject registration for ${app.name}?`)) {
-                                        rejectStudentApplication(app.id);
-                                        refreshStudentApps();
-                                      }
-                                    }}
-                                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-900/40 text-slate-400 hover:text-rose-400 transition-colors cursor-pointer"
-                                    title="Reject"
-                                  >
-                                    <X className="w-4 h-4" />
-                                  </button>
-                                </>
-                              )}
-
-                              {isApproved && app.issuedKey && (
-                                <button
-                                  onClick={() => {
-                                    const matchingLic = vaultLicenses.find(l => l.key === app.issuedKey || l.cleanKey === app.issuedKey);
-                                    if (matchingLic) {
-                                      const passText = generateVipPassText(matchingLic);
-                                      navigator.clipboard.writeText(passText);
-                                      setCopiedKeyId(app.id);
-                                      setTimeout(() => setCopiedKeyId(null), 2000);
-                                    } else {
-                                      navigator.clipboard.writeText(app.issuedKey || '');
-                                      setCopiedKeyId(app.id);
-                                      setTimeout(() => setCopiedKeyId(null), 2000);
-                                    }
-                                  }}
-                                  className="bg-slate-800 hover:bg-slate-700 text-cyan-300 font-bold text-xs px-3 py-1.5 rounded-lg border border-cyan-500/30 transition-all flex items-center gap-1.5 cursor-pointer"
-                                >
-                                  {copiedKeyId === app.id ? (
-                                    <>
-                                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                                      <span>Copied VIP Pass!</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Copy className="w-3.5 h-3.5" />
-                                      <span>Copy Telegram Pass</span>
-                                    </>
-                                  )}
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
+            return (
+              <div className="p-4 sm:p-6 space-y-6">
+                {/* Real-time Notification Banner */}
+                {newAppAlert && (
+                  <div className="bg-gradient-to-r from-cyan-500/20 via-cyan-400/25 to-emerald-500/20 border border-cyan-400/50 rounded-2xl p-4 flex items-center justify-between gap-4 text-cyan-200 text-xs font-bold shadow-xl shadow-cyan-950/40 animate-pulse">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-xl bg-cyan-400/20 text-cyan-300">
+                        <Bell className="w-5 h-5 animate-bounce" />
+                      </div>
+                      <div>
+                        <p className="text-white font-extrabold text-sm">{newAppAlert}</p>
+                        <p className="text-[11px] text-cyan-300/80 font-normal">Sound chime triggered. Review applicant details below and issue 1-Click VIP access key.</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setNewAppAlert(null)}
+                      className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs cursor-pointer"
+                    >
+                      Dismiss
+                    </button>
                   </div>
                 )}
+
+                {/* Header Banner */}
+                <div className="bg-gradient-to-r from-cyan-500/15 via-slate-900 to-slate-900 border border-cyan-500/30 rounded-2xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-0.5 rounded-full bg-cyan-400 text-slate-950 font-black text-[10px] tracking-wider uppercase">
+                        STUDENT ACCESS QUEUE
+                      </span>
+                      <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-bold text-[10px] border border-emerald-500/20">
+                        LIVE SIGN-UP DESK
+                      </span>
+                      <span className="px-2.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 font-bold text-[10px] border border-cyan-500/20 flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Auto-Polling Active
+                      </span>
+                    </div>
+                    <h2 className="text-xl sm:text-2xl font-black text-white flex items-center gap-2">
+                      <UserCheck className="w-6 h-6 text-cyan-400" /> Incoming Student Applications
+                    </h2>
+                    <p className="text-xs text-slate-400 max-w-xl">
+                      Review students who registered on the login portal. Verify application details and issue a non-repeating cryptographic key (ATM-XXXXXXX) with 1 click.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2 bg-slate-950/80 border border-slate-800 rounded-xl p-3">
+                    <div className="text-right">
+                      <p className="text-[10px] uppercase font-bold text-slate-400">Pending Review</p>
+                      <p className="text-xl font-black text-cyan-400">
+                        {pendingActiveCount} Requests
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => refreshStudentApps(false)}
+                      className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all cursor-pointer"
+                      title="Refresh List"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Sub Filter Navigation: Active vs Safe Archive / Trash */}
+                <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
+                  <button
+                    onClick={() => setAppSubFilter("active")}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                      appSubFilter === "active"
+                        ? "bg-cyan-400 text-slate-950 font-black shadow-lg shadow-cyan-500/20"
+                        : "bg-slate-950 text-slate-400 hover:text-white border border-slate-800 hover:bg-slate-900"
+                    }`}
+                  >
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>Active Registrations ({activeApps.length})</span>
+                    {pendingActiveCount > 0 && (
+                      <span className="bg-rose-500 text-white text-[9px] px-1.5 py-0.2 rounded-full font-bold ml-1 animate-pulse">
+                        {pendingActiveCount} New
+                      </span>
+                    )}
+                  </button>
+
+                  <button
+                    onClick={() => setAppSubFilter("trash")}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                      appSubFilter === "trash"
+                        ? "bg-amber-400 text-slate-950 font-black shadow-lg shadow-amber-500/20"
+                        : "bg-slate-950 text-slate-400 hover:text-amber-300 border border-slate-800 hover:bg-slate-900"
+                    }`}
+                  >
+                    <Archive className="w-3.5 h-3.5" />
+                    <span>Past Records / Trash ({trashApps.length})</span>
+                  </button>
+                </div>
+
+                {/* Applications List */}
+                <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 shadow-xl">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
+                    <h3 className="font-bold text-white text-sm flex items-center gap-2">
+                      {appSubFilter === "active" ? (
+                        <>
+                          <Clock className="w-4 h-4 text-cyan-400" /> Active Student Queue ({activeApps.length})
+                        </>
+                      ) : (
+                        <>
+                          <Archive className="w-4 h-4 text-amber-400" /> Past Students Archive & Trash ({trashApps.length})
+                        </>
+                      )}
+                    </h3>
+                    <span className="text-xs text-slate-400">
+                      {appSubFilter === "active" 
+                        ? `Total Active: ${activeApps.length} | Pending: ${pendingActiveCount}`
+                        : `Safely Archived: ${trashApps.length}`}
+                    </span>
+                  </div>
+
+                  {appSubFilter === "trash" && trashApps.length > 0 && (
+                    <div className="mb-4 p-3 rounded-xl bg-amber-950/20 border border-amber-500/30 text-xs text-amber-300/90 flex items-center gap-2">
+                      <Archive className="w-4 h-4 shrink-0 text-amber-400" />
+                      <span>
+                        Past student records are preserved here so you never lose admission history. Click <strong>Restore</strong> to bring any student back to the active queue, or <strong>Erase</strong> to permanently remove.
+                      </span>
+                    </div>
+                  )}
+
+                  {displayedApps.length === 0 ? (
+                    <div className="py-12 text-center text-slate-500 text-xs">
+                      {appSubFilter === "active" 
+                        ? "No active student registrations. When a new user registers on the Sign-Up tab, their request will appear here."
+                        : "Archive / Trash is currently empty. Any student record you remove from the active queue will be preserved here."}
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {displayedApps.map((app) => {
+                        const isPending = app.status === 'pending';
+                        const isApproved = app.status === 'approved';
+                        const isArchived = Boolean(app.isArchived || app.status === 'archived');
+
+                        return (
+                          <div
+                            key={app.id}
+                            className={`p-4 rounded-xl border transition-all ${
+                              isArchived
+                                ? "bg-slate-950/60 border-slate-800 opacity-80 hover:opacity-100"
+                                : isPending
+                                ? "bg-slate-900/90 border-cyan-500/40 shadow-lg shadow-cyan-950/20"
+                                : isApproved
+                                ? "bg-slate-950/70 border-emerald-500/25 opacity-90"
+                                : "bg-slate-950/40 border-slate-800 opacity-60"
+                            }`}
+                          >
+                            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                              {/* Applicant Info */}
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-bold text-white text-sm">
+                                    {app.name}
+                                  </span>
+                                  {isArchived ? (
+                                    <span className="text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                                      ARCHIVED RECORD
+                                    </span>
+                                  ) : (
+                                    <span
+                                      className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                                        isPending
+                                          ? "bg-amber-400/20 text-amber-300 border border-amber-400/30 animate-pulse"
+                                          : isApproved
+                                          ? "bg-emerald-400/20 text-emerald-300 border border-emerald-400/30"
+                                          : "bg-rose-400/20 text-rose-300 border border-rose-400/30"
+                                      }`}
+                                    >
+                                      {app.status}
+                                    </span>
+                                  )}
+                                  <span className="text-[10px] text-slate-500 font-mono">
+                                    Submitted: {new Date(app.submittedAt).toLocaleString()}
+                                  </span>
+                                  {app.archivedAt && (
+                                    <span className="text-[10px] text-amber-500/80 font-mono">
+                                      • Archived: {new Date(app.archivedAt).toLocaleTimeString()}
+                                    </span>
+                                  )}
+                                </div>
+
+                                <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400 pt-0.5">
+                                  {app.email && (
+                                    <span className="flex items-center gap-1 text-slate-300">
+                                      ✉️ Email: <strong className="text-white font-mono">{app.email}</strong>
+                                    </span>
+                                  )}
+                                  <span className="flex items-center gap-1 text-slate-300">
+                                    📱 Phone: <strong className="text-white font-mono">{app.contact}</strong>
+                                  </span>
+                                  <span className="flex items-center gap-1 text-cyan-300">
+                                    🆔 Pocket Option UID: <strong className="text-cyan-200 font-mono">{app.traderId || "None (Direct Member)"}</strong>
+                                  </span>
+                                  <span className="flex items-center gap-1 text-slate-300 text-xs">
+                                    💻 Device: <strong className="text-cyan-300 font-semibold">{app.deviceName || app.deviceId}</strong>
+                                  </span>
+                                </div>
+
+                                {app.issuedKey && (
+                                  <div className="mt-2 flex items-center gap-2 p-2 rounded-lg bg-emerald-950/40 border border-emerald-500/30 text-xs">
+                                    <Key className="w-3.5 h-3.5 text-emerald-400" />
+                                    <span className="text-slate-300">Issued Key:</span>
+                                    <strong className="text-emerald-300 font-mono text-sm tracking-wider">
+                                      {app.issuedKey}
+                                    </strong>
+                                    <span className="text-[10px] text-slate-400 font-medium">({app.plan || "1 Month ($47)"})</span>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Actions */}
+                              <div className="flex items-center gap-2 shrink-0">
+                                {isArchived ? (
+                                  <>
+                                    <button
+                                      onClick={() => {
+                                        restoreStudentApplication(app.id);
+                                        refreshStudentApps(false);
+                                      }}
+                                      className="bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 font-bold text-xs px-3 py-1.5 rounded-lg border border-cyan-500/30 transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+                                      title="Restore back to Active Queue"
+                                    >
+                                      <RotateCcw className="w-3.5 h-3.5 text-cyan-400" />
+                                      <span>Restore to Active</span>
+                                    </button>
+
+                                    <button
+                                      onClick={() => {
+                                        if (confirm(`Permanently erase ${app.name}'s past record forever? This cannot be undone.`)) {
+                                          deleteStudentApplicationPermanently(app.id);
+                                          refreshStudentApps(false);
+                                        }
+                                      }}
+                                      className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-950/60 text-slate-400 hover:text-rose-400 border border-slate-700 transition-colors cursor-pointer"
+                                      title="Permanently Delete Forever"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </>
+                                ) : (
+                                  <>
+                                    {isPending && (
+                                      <>
+                                        <select
+                                          id={`plan-${app.id}`}
+                                          defaultValue="1 Month ($47)"
+                                          className="bg-slate-950 border border-slate-700 text-white text-xs px-2.5 py-1.5 rounded-lg focus:outline-none focus:border-cyan-500"
+                                        >
+                                          <option value="1 Month ($47)">1 Month ($47)</option>
+                                          <option value="3 Months ($97)">3 Months ($97)</option>
+                                          <option value="6 Months ($147)">6 Months ($147)</option>
+                                          <option value="1 Year ($197)">1 Year ($197)</option>
+                                          <option value="Lifetime VIP ($247)">Lifetime VIP ($247)</option>
+                                        </select>
+
+                                        <button
+                                          onClick={() => {
+                                            const select = document.getElementById(`plan-${app.id}`) as HTMLSelectElement;
+                                            const chosenPlan = (select?.value || "1 Month ($47)") as LicenseKey['plan'];
+                                            const result = approveStudentApplication(app.id, chosenPlan);
+                                            if (result) {
+                                              refreshStudentApps(false);
+                                              setVaultLicenses(getIssuedLicenses());
+                                              const text = generateVipPassText(result.license);
+                                              navigator.clipboard.writeText(text);
+                                              alert(`✅ Approved!\nIssued Key: ${result.license.key}\nVIP Access Pass copied to clipboard for Telegram!`);
+                                            }
+                                          }}
+                                          className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 shadow-md shadow-emerald-500/20 cursor-pointer"
+                                        >
+                                          <Check className="w-3.5 h-3.5" />
+                                          <span>Approve & Issue ATM-Key</span>
+                                        </button>
+
+                                        <button
+                                          onClick={() => {
+                                            if (confirm(`Reject registration for ${app.name}?`)) {
+                                              rejectStudentApplication(app.id);
+                                              refreshStudentApps(false);
+                                            }
+                                          }}
+                                          className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-900/40 text-slate-400 hover:text-rose-400 transition-colors cursor-pointer"
+                                          title="Reject"
+                                        >
+                                          <X className="w-4 h-4" />
+                                        </button>
+                                      </>
+                                    )}
+
+                                    {isApproved && app.issuedKey && (
+                                      <button
+                                        onClick={() => {
+                                          const matchingLic = vaultLicenses.find(l => l.key === app.issuedKey || l.cleanKey === app.issuedKey);
+                                          if (matchingLic) {
+                                            const passText = generateVipPassText(matchingLic);
+                                            navigator.clipboard.writeText(passText);
+                                            setCopiedKeyId(app.id);
+                                            setTimeout(() => setCopiedKeyId(null), 2000);
+                                          } else {
+                                            navigator.clipboard.writeText(app.issuedKey || '');
+                                            setCopiedKeyId(app.id);
+                                            setTimeout(() => setCopiedKeyId(null), 2000);
+                                          }
+                                        }}
+                                        className="bg-slate-800 hover:bg-slate-700 text-cyan-300 font-bold text-xs px-3 py-1.5 rounded-lg border border-cyan-500/30 transition-all flex items-center gap-1.5 cursor-pointer"
+                                      >
+                                        {copiedKeyId === app.id ? (
+                                          <>
+                                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                                            <span>Copied VIP Pass!</span>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <Copy className="w-3.5 h-3.5" />
+                                            <span>Copy Telegram Pass</span>
+                                          </>
+                                        )}
+                                      </button>
+                                    )}
+
+                                    {/* Safe Archive / Trash Button */}
+                                    <button
+                                      onClick={() => {
+                                        if (confirm(`Move ${app.name}'s registration to Past Students Archive / Trash? The record will remain 100% safe in your Past Records.`)) {
+                                          archiveStudentApplication(app.id);
+                                          refreshStudentApps(false);
+                                        }
+                                      }}
+                                      className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-amber-950/50 text-slate-400 hover:text-amber-300 border border-slate-700/60 transition-colors cursor-pointer"
+                                      title="Move to Past Records / Trash (डेटा सुरक्षित रहेगा)"
+                                    >
+                                      <Archive className="w-4 h-4" />
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* TAB: CRYPTO LICENSE VAULT */}
           {activeTab === "vault" && (
