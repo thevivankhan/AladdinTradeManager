@@ -81,8 +81,8 @@ export const AdminPanel = ({
 
   // Live student signup alert state
   const [newSignupAlert, setNewSignupAlert] = useState<{ name: string; contact: string; deviceName?: string } | null>(null);
-  const prevPendingCountRef = useRef<number | null>(null);
-  const isInitialPollRef = useRef(true);
+  const panelMountedAtRef = useRef<number>(Date.now());
+  const seenApplicantIdsRef = useRef<Set<string>>(new Set());
 
   const playNotificationSound = () => {
     try {
@@ -121,12 +121,20 @@ export const AdminPanel = ({
   };
 
   const refreshStudentApps = () => {
-    setStudentApps(getStudentApplications());
+    const local = getStudentApplications();
+    setStudentApps(local);
+    local.forEach(a => {
+      if (a && a.id) seenApplicantIdsRef.current.add(a.id);
+    });
+
     fetch('/api/student-applications')
       .then(res => res.json())
       .then(data => {
         if (data && Array.isArray(data.applications)) {
           setStudentApps(data.applications);
+          data.applications.forEach((a: any) => {
+            if (a && a.id) seenApplicantIdsRef.current.add(a.id);
+          });
         }
       })
       .catch(() => {});
@@ -150,34 +158,37 @@ export const AdminPanel = ({
       })
       .catch(() => {});
 
-    // Polling every 3.5 seconds for instant notification of new student applications
+    // Polling every 2.5 seconds for instant real-time notification of new student applications
+    // STRICT RULE: Old applications existing prior to page refresh/load NEVER play sound or banner!
     const pollInterval = setInterval(() => {
       fetch('/api/student-applications/status')
         .then((res) => res.json())
         .then((data) => {
-          if (data && typeof data.pendingCount === 'number') {
-            if (isInitialPollRef.current) {
-              prevPendingCountRef.current = data.pendingCount;
-              isInitialPollRef.current = false;
-            } else if (prevPendingCountRef.current !== null && data.pendingCount > prevPendingCountRef.current) {
-              // 🔔 NEW REGISTRATION RECEIVED! Trigger notification bell and alert banner
-              playNotificationSound();
-              if (data.latestApplicant) {
-                setNewSignupAlert({
-                  name: data.latestApplicant.name || 'New Student',
-                  contact: data.latestApplicant.contact || '',
-                  deviceName: data.latestApplicant.deviceName || data.latestApplicant.deviceId,
-                });
+          if (data && data.success) {
+            const latestId = data.latestId;
+            const latestSubmittedAt = data.latestSubmittedAt || 0;
+
+            if (latestId) {
+              if (!seenApplicantIdsRef.current.has(latestId)) {
+                // If submitted strictly after admin panel opened, trigger chime and live alert
+                if (latestSubmittedAt > panelMountedAtRef.current) {
+                  playNotificationSound();
+                  if (data.latestApplicant) {
+                    setNewSignupAlert({
+                      name: data.latestApplicant.name || 'New Student',
+                      contact: data.latestApplicant.contact || '',
+                      deviceName: data.latestApplicant.deviceName || data.latestApplicant.deviceId,
+                    });
+                  }
+                  refreshStudentApps();
+                }
+                seenApplicantIdsRef.current.add(latestId);
               }
-              refreshStudentApps();
-              prevPendingCountRef.current = data.pendingCount;
-            } else {
-              prevPendingCountRef.current = data.pendingCount;
             }
           }
         })
         .catch(() => {});
-    }, 3500);
+    }, 2500);
 
     return () => clearInterval(pollInterval);
   }, []);
@@ -844,7 +855,7 @@ export const AdminPanel = ({
 
       {/* Custom Modal */}
       {modalConfig.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-md w-full shadow-2xl">
             <h3 className="text-xl font-bold text-white mb-2">
               {modalConfig.title}
@@ -853,22 +864,25 @@ export const AdminPanel = ({
             <div className="flex justify-end gap-3">
               {modalConfig.type === "confirm" && (
                 <button
+                  type="button"
                   onClick={() =>
                     setModalConfig({ ...modalConfig, isOpen: false })
                   }
-                  className="px-4 py-2 rounded-lg font-bold text-sm bg-slate-800 hover:bg-slate-700 text-white transition-colors"
+                  className="px-4 py-2 rounded-lg font-bold text-sm bg-slate-800 hover:bg-slate-700 text-white transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
               )}
               <button
-                onClick={() => {
-                  setModalConfig({ ...modalConfig, isOpen: false });
-                  if (modalConfig.type === "confirm" && modalConfig.onConfirm) {
-                    modalConfig.onConfirm();
+                type="button"
+                onClick={async () => {
+                  const onConfirm = modalConfig.onConfirm;
+                  setModalConfig((prev) => ({ ...prev, isOpen: false }));
+                  if (modalConfig.type === "confirm" && onConfirm) {
+                    await onConfirm();
                   }
                 }}
-                className="px-4 py-2 rounded-lg font-bold text-sm bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition-colors"
+                className="px-4 py-2 rounded-lg font-bold text-sm bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition-colors cursor-pointer"
               >
                 {modalConfig.type === "confirm" ? "Confirm" : "OK"}
               </button>
@@ -1623,12 +1637,16 @@ export const AdminPanel = ({
                                       onClick={() => {
                                         setModalConfig({
                                           isOpen: true,
-                                          title: 'Reject / Remove Registration',
+                                          title: 'Reject & Remove Registration',
                                           message: `Are you sure you want to remove the registration request for "${app.name}"?`,
                                           type: 'confirm',
-                                          onConfirm: () => {
-                                            deleteStudentApplication(app.id);
-                                            refreshStudentApps();
+                                          onConfirm: async () => {
+                                            setStudentApps((prev) => prev.filter((a) => a.id !== app.id));
+                                            try {
+                                              await deleteStudentApplication(app.id);
+                                            } finally {
+                                              refreshStudentApps();
+                                            }
                                           },
                                         });
                                       }}
@@ -1691,9 +1709,13 @@ export const AdminPanel = ({
                                         title: 'Remove Record',
                                         message: `Remove this registration card for "${app.name}"? (The issued key in the Crypto Vault will stay safe).`,
                                         type: 'confirm',
-                                        onConfirm: () => {
-                                          deleteStudentApplication(app.id);
-                                          refreshStudentApps();
+                                        onConfirm: async () => {
+                                          setStudentApps((prev) => prev.filter((a) => a.id !== app.id));
+                                          try {
+                                            await deleteStudentApplication(app.id);
+                                          } finally {
+                                            refreshStudentApps();
+                                          }
                                         },
                                       });
                                     }}

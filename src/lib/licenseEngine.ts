@@ -421,34 +421,45 @@ export const approveStudentApplication = (
   return { app: apps[idx], license: newLic };
 };
 
-export const rejectStudentApplication = (appId: string): boolean => {
+export const rejectStudentApplication = async (appId: string): Promise<boolean> => {
   const apps = getStudentApplications();
   const idx = apps.findIndex((a) => a.id === appId);
   if (idx !== -1) {
     apps[idx] = { ...apps[idx], status: 'rejected' };
     saveStudentApplications(apps);
   }
-  fetch('/api/student-applications/reject', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ appId }),
-  }).catch(() => {});
+  try {
+    const res = await fetch('/api/student-applications/reject', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ appId }),
+    });
+    const data = await res.json();
+    if (data && Array.isArray(data.applications)) {
+      saveStudentApplications(data.applications);
+    }
+  } catch {}
   return true;
 };
 
-export const deleteStudentApplication = (appId: string): boolean => {
+export const deleteStudentApplication = async (appId: string): Promise<boolean> => {
   const apps = getStudentApplications();
   const filtered = apps.filter((a) => a.id !== appId);
   saveStudentApplications(filtered);
-  fetch('/api/student-applications/delete', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ appId }),
-  }).catch(() => {});
+  try {
+    const res = await fetch('/api/student-applications/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ appId }),
+    });
+    const data = await res.json();
+    if (data && Array.isArray(data.applications)) {
+      saveStudentApplications(data.applications);
+    }
+  } catch {}
   return true;
 };
 
-/**
 /**
  * Formats a 7-character raw key into clean 7 characters without any dash
  */

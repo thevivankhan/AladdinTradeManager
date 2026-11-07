@@ -358,11 +358,14 @@ app.get('/api/student-applications', (req, res) => {
 // Lightweight Status polling for instant Admin Sound Notifications
 app.get('/api/student-applications/status', (req, res) => {
   const pending = studentApplications.filter((a: any) => a.status === 'pending');
+  const latest = pending[0] || null;
   res.json({
     success: true,
     totalCount: studentApplications.length,
     pendingCount: pending.length,
-    latestApplicant: pending[0] || null,
+    latestId: latest ? latest.id : null,
+    latestSubmittedAt: latest ? (latest.submittedAt || 0) : 0,
+    latestApplicant: latest,
   });
 });
 
