@@ -1029,11 +1029,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
       </header>
 
       {/* Main Content Area */}
-      <main className="relative z-10 max-w-[360px] w-full mx-auto px-3 py-2 flex flex-col gap-4 flex-1">
+      <main className="relative z-10 max-w-[340px] w-full mx-auto px-2.5 py-2 flex flex-col gap-3.5 flex-1">
         {/* ============================================================== */}
         {/* HERO ACCESS CARD (CODE & ID MODES)                             */}
         {/* ============================================================== */}
-        <section className="bg-[#0b1325]/90 border border-slate-800/90 rounded-2xl p-4 sm:p-4.5 shadow-xl backdrop-blur-md">
+        <section className="bg-[#0b1325]/90 border border-slate-800/90 rounded-2xl p-3.5 sm:p-4 shadow-xl backdrop-blur-md">
           {/* Top Mode Switcher Pill */}
           <div className="bg-slate-950/80 p-1 rounded-xl flex border border-slate-800/80 mb-3.5">
             <button
@@ -1087,7 +1087,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
                     value={digit}
                     onChange={(e) => handleDigitChange(idx, e.target.value)}
                     onKeyDown={(e) => handleDigitKeyDown(idx, e)}
-                    className="w-8 sm:w-8.5 h-10 sm:h-10.5 text-center text-sm sm:text-base font-mono font-bold uppercase bg-[#090f1d] border border-slate-700/80 focus:border-fuchsia-400 focus:ring-1 focus:ring-fuchsia-500/30 text-white rounded-lg outline-none transition-all shadow-inner"
+                    className="w-7.5 sm:w-8 h-9.5 sm:h-10 text-center text-sm font-mono font-bold uppercase bg-[#090f1d] border border-slate-700/80 focus:border-fuchsia-400 focus:ring-1 focus:ring-fuchsia-500/30 text-white rounded-lg outline-none transition-all shadow-inner"
                   />
                 ))}
               </div>
