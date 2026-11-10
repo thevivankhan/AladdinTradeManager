@@ -334,7 +334,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
               <div className="flex flex-col items-center">
                 <label className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider flex items-center justify-center gap-1.5 mb-2 text-center">
                   <Key className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Enter Cryptographic Access Key</span>
+                  <span>Enter Encrypted 7-Digit Access Key</span>
                 </label>
 
                 {/* Ultra-Compact Rectangular Box Tailored Snugly to 7 Keys & Horizontally Centered */}
