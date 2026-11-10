@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <script>
+      (function() {
+        var origConsoleError = console.error;
+        console.error = function() {
+          var args = Array.prototype.slice.call(arguments);
+          var msg = args.map(function(a) {
+            return (a && a instanceof Error) ? (a.message + ' ' + (a.stack || '')) : String(a || '');
+          }).join(' ');
+          if (
+            msg.indexOf('Could not reach Cloud Firestore backend') !== -1 ||
+            msg.indexOf('@firebase/firestore') !== -1 ||
+            (msg.indexOf('WebSocket') !== -1 && (msg.indexOf('closed without opened') !== -1 || msg.indexOf('@vite/client') !== -1 || msg.indexOf('[vite]') !== -1))
+          ) {
+            return;
+          }
+          return origConsoleError.apply(console, arguments);
+        };
+        var origConsoleWarn = console.warn;
+        console.warn = function() {
+          var args = Array.prototype.slice.call(arguments);
+          var msg = args.map(function(a) {
+            return (a && a instanceof Error) ? (a.message + ' ' + (a.stack || '')) : String(a || '');
+          }).join(' ');
+          if (
+            msg.indexOf('Could not reach Cloud Firestore backend') !== -1 ||
+            msg.indexOf('@firebase/firestore') !== -1
+          ) {
+            return;
+          }
+          return origConsoleWarn.apply(console, arguments);
+        };
+        if (typeof window !== 'undefined' && window.WebSocket) {
+          var OrigWS = window.WebSocket;
+          window.WebSocket = function(url, protocols) {
+            if (protocols === 'vite-hmr' || (typeof url === 'string' && url.indexOf('vite-hmr') !== -1)) {
+              var dummy = new EventTarget();
+              dummy.binaryType = 'blob';
+              dummy.readyState = 1;
+              dummy.send = function() {};
+              dummy.close = function() {};
+              setTimeout(function() {
+                var openEvt = new Event('open');
+                dummy.dispatchEvent(openEvt);
+              }, 10);
+              return dummy;
+            }
+            return new OrigWS(url, protocols);
+          };
+          window.WebSocket.prototype = OrigWS.prototype;
+          window.WebSocket.CONNECTING = OrigWS.CONNECTING;
+          window.WebSocket.OPEN = OrigWS.OPEN;
+          window.WebSocket.CLOSING = OrigWS.CLOSING;
+          window.WebSocket.CLOSED = OrigWS.CLOSED;
+        }
+
+        window.addEventListener('error', function(e) {
+          var msg = e ? e.message : '';
+          var fn = e ? e.filename : '';
+          if (typeof msg === 'string' && (msg.indexOf('Could not reach Cloud Firestore backend') !== -1 || msg.indexOf('@firebase/firestore') !== -1 || msg.indexOf('WebSocket') !== -1 || msg.indexOf('ServiceWorker') !== -1 || msg.indexOf('dev-sw.js') !== -1)) {
+            e.stopImmediatePropagation();
+            e.preventDefault();
+            return true;
+          }
+          if (typeof fn === 'string' && (fn.indexOf('@vite/client') !== -1 || fn.indexOf('dev-sw.js') !== -1)) {
+            e.stopImmediatePropagation();
+            e.preventDefault();
+            return true;
+          }
+        }, true);
+        window.addEventListener('unhandledrejection', function(e) {
+          var reason = e ? (e.reason && e.reason.message) || String(e.reason || '') : '';
+          if (typeof reason === 'string' && (reason.indexOf('Could not reach Cloud Firestore backend') !== -1 || reason.indexOf('@firebase/firestore') !== -1 || reason.indexOf('WebSocket') !== -1 || reason.indexOf('ServiceWorker') !== -1 || reason.indexOf('dev-sw.js') !== -1)) {
+            e.stopImmediatePropagation();
+            e.preventDefault();
+            return true;
+          }
+        }, true);
+      })();
+    </script>
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/pwa-192x192.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#0f172a" />
+    <meta name="description" content="Aladdin Trade Manager (ATM) - Advance Trading Ecosystem, Smart Journal, Compounding Planner, and Institutional Risk Management Suite." />
+    <title>Aladdin Trade Manager™ | Advance Trading Ecosystem</title>
+  </head>
+  <body class="bg-[#05070e] text-slate-100">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,75 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Core Helpers
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.email == "thevivankhan@gmail.com" ||
+        request.auth.token.email == "thealphafxpro@gmail.com" || 
+        request.auth.token.email == "ololootc@gmail.com" ||
+        request.auth.token.email == "ololouniversity@gmail.com" ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // users collection
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) || isAdmin();
+      allow update: if isOwner(userId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // payments collection
+    match /payments/{paymentId} {
+      allow read: if (isAuthenticated() && resource.data.userId == request.auth.uid) || isAdmin();
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    // signals collection (Public read for trading room)
+    match /signals/{signalId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // market_bias collection (Public read for trading room)
+    match /market_bias/{biasId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // scans collection (Chart Scanner feature)
+    match /scans/{scanId} {
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow read, update, delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // device_locks collection (1 Key = 1 Device Anti-Piracy Hardware Lock)
+    match /device_locks/{lockId} {
+      allow read, write: if true;
+    }
+
+    // student_applications collection (Institutional sign-up requests)
+    match /student_applications/{appId} {
+      allow read, write: if true;
+    }
+
+    // fallback for anything else
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+

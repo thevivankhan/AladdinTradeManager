@@ -1,0 +1,8 @@
+{
+  "name": "ATM™ V4.0",
+  "description": "A daily compounding calculator tool for trading, matching the OlOlO Trading Room design.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": []
+}
