@@ -1501,7 +1501,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
                         if (errorMessage) setErrorMessage(null);
                       }}
                       placeholder={t.idPlaceholder}
-                      className="w-full pl-10 pr-4 py-2.5 bg-[#080e1b] border border-slate-700/80 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/20 rounded-xl text-slate-100 placeholder-slate-500 font-mono text-xs outline-none transition-all"
+                      className="w-full pl-10 pr-4 py-2.5 bg-[#18233c] hover:bg-[#1c2946] border border-slate-600/90 hover:border-slate-500 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/20 rounded-xl text-slate-100 placeholder-slate-400 font-mono text-xs outline-none transition-all shadow-[inset_0_1px_3px_rgba(0,0,0,0.4)]"
                     />
                   </div>
 
@@ -1729,7 +1729,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
                     if (errorMessage) setErrorMessage(null);
                   }}
                   placeholder={t.idPlaceholder}
-                  className="w-full pl-10 pr-4 py-2.5 bg-[#080e1b] border border-slate-700/80 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/20 rounded-xl text-slate-100 placeholder-slate-500 font-mono text-xs outline-none transition-all"
+                  className="w-full pl-10 pr-4 py-2.5 bg-[#18233c] hover:bg-[#1c2946] border border-slate-600/90 hover:border-slate-500 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/20 rounded-xl text-slate-100 placeholder-slate-400 font-mono text-xs outline-none transition-all shadow-[inset_0_1px_3px_rgba(0,0,0,0.4)]"
                 />
               </div>
 
