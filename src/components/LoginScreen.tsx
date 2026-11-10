@@ -99,13 +99,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
         if (lic) {
           saveActiveSession(lic);
         }
+        const isLifetime = Boolean(lic?.plan?.includes("Lifetime") || (lic?.expiresAt === null && !lic?.plan?.includes("Month") && !lic?.plan?.includes("Year")));
         const licenseUser = {
           uid: "lic-" + (lic?.cleanKey || cleanUpper),
           email: lic?.traderName || `trader-${cleanUpper}@aladdin.org.in`,
           name: lic?.traderName || "VIP Member",
           role: licenseResult.role || "user",
-          status: "active",
-          isLifetimePaid: lic?.plan?.includes("Lifetime") ?? true,
+          status: lic?.status || "active",
+          isLifetimePaid: isLifetime,
           plan: lic?.plan || "VIP Access",
           expiresAt: lic?.expiresAt,
           createdAt: new Date().toISOString(),
@@ -114,9 +115,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
         return;
       }
 
-      throw new Error(licenseResult.reason || "Invalid License Key. Please enter a valid 7-digit ATM Key or request access from Master Admin.");
+      throw new Error(licenseResult.reason || "Invalid License Key. Please enter a valid 7-digit ATM Key or request access from Support.");
     } catch (err: any) {
-      setError(err.message || "Invalid License Key. Please enter a valid 7-digit ATM Key or request access from Master Admin.");
+      setError(err.message || "Invalid License Key. Please enter a valid 7-digit ATM Key or request access from Support.");
     } finally {
       setIsLoading(false);
     }

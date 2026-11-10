@@ -211,37 +211,17 @@ app.post('/api/auth/verify-license', (req, res) => {
       });
     }
 
-    // 1. Check if key is known in issued licenses OR in the 1,000 deterministic crypto vault
+    // 1. Check if key is registered and issued by Admin
     const licenses = licensesData.licenses || [];
     let foundIdx = licenses.findIndex(
       (l: any) => l.cleanKey === clean || l.key === normalized || l.key === key.trim().toUpperCase()
     );
 
-    const isInVault = VAULT_CLEAN_SET.has(clean);
-
-    if (foundIdx === -1 && !isInVault) {
-      return res.status(404).json({
+    if (foundIdx === -1) {
+      return res.status(403).json({
         success: false,
-        message: 'Invalid 7-digit ATM Key. Please verify or contact Master Admin (@thevivankhan) for a valid pass.'
+        message: 'Invalid or Inactive License Key. Please contact Support to activate your 7-digit access key.'
       });
-    }
-
-    // If key belongs to the 1000 cryptographic pool but wasn't pre-recorded, bootstrap it now!
-    if (foundIdx === -1 && isInVault) {
-      const newVaultLic = {
-        id: `lic-vault-${Date.now()}-${clean}`,
-        key: normalized,
-        cleanKey: clean,
-        traderName: 'VIP Trader',
-        plan: 'Lifetime VIP ($247)',
-        issuedAt: Date.now(),
-        expiresAt: null,
-        status: 'active',
-      };
-      licenses.unshift(newVaultLic);
-      licensesData.licenses = licenses;
-      saveLicenses();
-      foundIdx = 0;
     }
 
     const license = licenses[foundIdx];
@@ -249,14 +229,14 @@ app.post('/api/auth/verify-license', (req, res) => {
     if (license.status === 'suspended') {
       return res.status(403).json({
         success: false,
-        message: 'This license has been suspended by Desk Admin.'
+        message: 'Access Suspended: This license has been suspended by Desk Admin. Please contact Support.'
       });
     }
 
     if (license.expiresAt && Date.now() > license.expiresAt) {
       return res.status(403).json({
         success: false,
-        message: `License expired on ${new Date(license.expiresAt).toLocaleDateString()}. Please contact Admin.`
+        message: `VIP License Expired: Your subscription ended on ${new Date(license.expiresAt).toLocaleDateString()}. Please contact Support to renew.`
       });
     }
 
@@ -292,7 +272,7 @@ app.post('/api/auth/verify-license', (req, res) => {
       // Hardware mismatch alert!
       return res.status(403).json({
         success: false,
-        message: `🔒 Hardware Security Alert: Key is locked to another device (${existingLock.deviceName}). 1 Key = 1 Device only. Contact Master Admin (@thevivankhan) to reset.`
+        message: '🔒 Hardware Security Alert: Key is locked to another device. 1 Key = 1 Device only. Contact Support to reset.'
       });
     }
 
@@ -350,6 +330,76 @@ app.post('/api/admin/reset-device-lock', (req, res) => {
     }
 
     res.json({ success: true, message: 'Device lock successfully cleared.' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Admin Renew / Extend License Endpoint
+app.post('/api/admin/renew-license', (req, res) => {
+  try {
+    const { licenseId, key, daysToAdd = 30 } = req.body;
+    const clean = (key || '').toUpperCase().replace(/^ATM[-_\s]?/, '').replace(/[^A-Z0-9]/g, '').slice(0, 7);
+    const licenses = licensesData.licenses || [];
+    const idx = licenses.findIndex((l: any) => l.id === licenseId || l.cleanKey === clean || l.key === key);
+
+    if (idx === -1) {
+      return res.status(404).json({ success: false, message: 'License not found on server.' });
+    }
+
+    const lic = licenses[idx];
+    const baseTime = lic.expiresAt && lic.expiresAt > Date.now() ? lic.expiresAt : Date.now();
+    lic.expiresAt = baseTime + Number(daysToAdd) * 24 * 60 * 60 * 1000;
+    lic.status = 'active';
+    licenses[idx] = lic;
+    saveLicenses();
+
+    res.json({ success: true, message: `License successfully extended by ${daysToAdd} days.`, license: lic });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Admin Toggle Suspend / Kill-Switch Endpoint
+app.post('/api/admin/toggle-suspend', (req, res) => {
+  try {
+    const { licenseId, key } = req.body;
+    const clean = (key || '').toUpperCase().replace(/^ATM[-_\s]?/, '').replace(/[^A-Z0-9]/g, '').slice(0, 7);
+    const licenses = licensesData.licenses || [];
+    const idx = licenses.findIndex((l: any) => l.id === licenseId || l.cleanKey === clean || l.key === key);
+
+    if (idx === -1) {
+      return res.status(404).json({ success: false, message: 'License not found on server.' });
+    }
+
+    const lic = licenses[idx];
+    lic.status = lic.status === 'suspended' ? 'active' : 'suspended';
+    licenses[idx] = lic;
+    saveLicenses();
+
+    res.json({ success: true, status: lic.status, message: `License is now ${lic.status}.`, license: lic });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Admin Permanently Delete License Endpoint
+app.post('/api/admin/delete-license', (req, res) => {
+  try {
+    const { licenseId, key } = req.body;
+    const clean = (key || '').toUpperCase().replace(/^ATM[-_\s]?/, '').replace(/[^A-Z0-9]/g, '').slice(0, 7);
+    
+    // Clear device lock if exists
+    if (clean && deviceLocks[clean]) {
+      delete deviceLocks[clean];
+      saveDeviceLocks();
+    }
+
+    const licenses = licensesData.licenses || [];
+    licensesData.licenses = licenses.filter((l: any) => !(l.id === licenseId || l.cleanKey === clean || l.key === key));
+    saveLicenses();
+
+    res.json({ success: true, message: 'License permanently removed from server.' });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }

@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import {
   getIssuedLicenses,
+  saveIssuedLicenses,
   issueNewLicense,
   renewLicense,
   toggleSuspendLicense,
@@ -162,6 +163,16 @@ export const AdminPanel = ({
 
   useEffect(() => {
     setVaultLicenses(getIssuedLicenses());
+    fetch('/api/licenses')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && Array.isArray(data.licenses)) {
+          setVaultLicenses(data.licenses);
+          saveIssuedLicenses(data.licenses);
+        }
+      })
+      .catch(() => {});
+
     refreshStudentApps(false);
 
     // Live sync polling every 6 seconds so incoming registrations alert admin automatically
@@ -554,10 +565,10 @@ export const AdminPanel = ({
     showConfirm(
       "Renew VIP License",
       `Extend license ${lic.key} for ${lic.traderName} by ${days} days?`,
-      () => {
-        renewLicense(lic.id, days);
+      async () => {
+        await renewLicense(lic.id, days);
         setVaultLicenses(getIssuedLicenses());
-        showAlert("Renewed", `License ${lic.key} successfully extended by ${days} days.`);
+        showAlert("Renewed", `License ${lic.key} successfully extended by ${days} days on Server.`);
       }
     );
   };
@@ -567,14 +578,14 @@ export const AdminPanel = ({
     showConfirm(
       isSuspending ? "Kill-Switch (Suspend Access)" : "Reactivate Access",
       isSuspending
-        ? `Are you sure you want to SUSPEND ${lic.traderName} (${lic.key})? They will immediately lose access.`
+        ? `Are you sure you want to SUSPEND ${lic.traderName} (${lic.key})? They will immediately lose access on their device.`
         : `Reactivate access for ${lic.traderName} (${lic.key})?`,
-      () => {
-        toggleSuspendLicense(lic.id);
+      async () => {
+        await toggleSuspendLicense(lic.id);
         setVaultLicenses(getIssuedLicenses());
         showAlert(
           isSuspending ? "Access Denied" : "Access Restored",
-          `License ${lic.key} is now ${isSuspending ? "SUSPENDED" : "ACTIVE"}.`
+          `License ${lic.key} is now ${isSuspending ? "SUSPENDED" : "ACTIVE"} on Server.`
         );
       }
     );
@@ -584,8 +595,8 @@ export const AdminPanel = ({
     showConfirm(
       "Delete License",
       `Are you sure you want to permanently delete license ${lic.key} for ${lic.traderName}? This cannot be undone.`,
-      () => {
-        deleteLicense(lic.id);
+      async () => {
+        await deleteLicense(lic.id);
         setVaultLicenses(getIssuedLicenses());
         if (lastIssuedLicense?.id === lic.id) setLastIssuedLicense(null);
         showAlert("Deleted", `License ${lic.key} removed from system.`);

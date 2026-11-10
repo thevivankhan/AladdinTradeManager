@@ -83,7 +83,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { openTelegramSupport } from "./lib/telegram";
 
 import LandingPage from "./components/LandingPage";
-import { getIssuedLicenses } from "./lib/licenseEngine";
+import { getIssuedLicenses, saveIssuedLicenses } from "./lib/licenseEngine";
 
 function lazyWithRetry<T extends React.ComponentType<any>>(
   factory: () => Promise<{ default: T }>
@@ -477,13 +477,13 @@ export default function App() {
 
 
 
-  // Live remote sync for Crypto VIP licenses (enforces admin kill-switch and instant renewal)
+  // Live remote sync for Crypto VIP licenses (enforces admin kill-switch, auto-expiry, and instant renewal)
   useEffect(() => {
     if (!dbUser?.activeCryptoKey) return;
     const checkLicense = () => {
       try {
         const licenses = getIssuedLicenses();
-        const cleanKey = dbUser.activeCryptoKey?.replace('-', '');
+        const cleanKey = dbUser.activeCryptoKey?.replace(/^ATM[-_\s]?/, '').toUpperCase().slice(0, 7);
         const found = licenses.find(l => l.key === dbUser.activeCryptoKey || l.cleanKey === cleanKey);
         if (found) {
           const expirationTime = found.expiresAt ? new Date(found.expiresAt).toISOString() : null;
@@ -499,12 +499,56 @@ export default function App() {
       } catch {}
     };
 
+    const syncServerLicense = async () => {
+      try {
+        const cleanKey = dbUser.activeCryptoKey?.replace(/^ATM[-_\s]?/, '').toUpperCase().slice(0, 7);
+        if (!cleanKey || cleanKey.length !== 7) return;
+        const clientDevId = localStorage.getItem('atm_client_device_id') || 'dev_active';
+        const res = await fetch('/api/auth/verify-license', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: `ATM-${cleanKey}`, deviceId: clientDevId })
+        });
+        const data = await res.json();
+        if (data?.success && data?.license) {
+          const expirationTime = data.license.expiresAt ? new Date(data.license.expiresAt).toISOString() : null;
+          setDbUser((prev: any) => ({
+            ...prev,
+            status: data.license.status,
+            isLifetimePaid: !data.license.expiresAt,
+            subscriptionEndDate: expirationTime,
+          }));
+          const existing = getIssuedLicenses();
+          const idx = existing.findIndex((l: any) => l.cleanKey === cleanKey || l.id === data.license.id);
+          if (idx !== -1) {
+            existing[idx] = data.license;
+          } else {
+            existing.unshift(data.license);
+          }
+          saveIssuedLicenses(existing);
+        } else if (!data?.success && (res.status === 403 || res.status === 404)) {
+          // Suspended, expired or revoked by admin on server
+          setDbUser((prev: any) => ({
+            ...prev,
+            status: 'suspended',
+            subscriptionEndDate: new Date(Date.now() - 1000).toISOString(),
+            isLifetimePaid: false
+          }));
+        }
+      } catch {}
+    };
+
     checkLicense();
+    syncServerLicense();
     const interval = setInterval(checkLicense, 3000);
+    const serverInterval = setInterval(syncServerLicense, 25000);
     window.addEventListener("storage", checkLicense);
+    window.addEventListener("focus", syncServerLicense);
     return () => {
       clearInterval(interval);
+      clearInterval(serverInterval);
       window.removeEventListener("storage", checkLicense);
+      window.removeEventListener("focus", syncServerLicense);
     };
   }, [dbUser?.activeCryptoKey, dbUser?.status, dbUser?.subscriptionEndDate]);
 

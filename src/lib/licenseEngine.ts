@@ -314,6 +314,11 @@ export const approveStudentApplication = (
     if (licIdx !== -1) {
       licenses[licIdx] = newLic;
       saveIssuedLicenses(licenses);
+      fetch('/api/licenses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newLic),
+      }).catch(() => {});
     }
   }
 
@@ -571,29 +576,12 @@ export const validateLicenseCode = (input: string): ValidationResult => {
 
   const isInVault = VAULT_CLEAN_KEYS_SET.has(stripped);
 
-  if (foundIdx === -1 && !isInVault) {
+  if (foundIdx === -1) {
     return {
       valid: false,
       role: 'user',
-      reason: 'Invalid License Key. Please enter a valid 7-digit ATM Key or request access from Master Admin.',
+      reason: 'Invalid or Inactive License Key. Please contact Support to activate your 7-digit access key.',
     };
-  }
-
-  // If key belongs to circular pool but was not pre-issued on this device, bootstrap it now!
-  if (foundIdx === -1 && isInVault) {
-    const vaultLicense: LicenseKey = {
-      id: `lic-vault-${Date.now()}-${stripped}`,
-      key: `ATM-${stripped}`,
-      cleanKey: stripped,
-      traderName: 'VIP Trader',
-      plan: 'Lifetime VIP ($247)',
-      issuedAt: Date.now(),
-      expiresAt: null, // Lifetime VIP
-      status: 'active',
-    };
-    licenses.unshift(vaultLicense);
-    saveIssuedLicenses(licenses);
-    foundIdx = 0;
   }
 
   const found = licenses[foundIdx];
@@ -667,23 +655,42 @@ export const validateLicenseCode = (input: string): ValidationResult => {
  * Validates a key online with server backend, enforcing cross-device hardware locking
  * while falling back safely to offline cryptographic validation if server is unreachable.
  */
+/**
+ * Validates a key online with server backend, enforcing cross-device hardware locking
+ * and strict plan-based expiration authority.
+ */
 export const verifyLicenseKeyOnline = async (input: string): Promise<ValidationResult> => {
-  const localResult = validateLicenseCode(input);
-  if (!localResult.valid) {
-    return localResult;
-  }
-  if (localResult.role === 'admin') {
-    return localResult;
+  const trimmed = input.trim();
+  const lower = trimmed.toLowerCase();
+
+  // 1. Check if user typed a Master Admin Whitelist Email
+  if (MASTER_ADMIN_EMAILS.map(e => e.toLowerCase()).includes(lower)) {
+    return {
+      valid: true,
+      role: 'admin',
+      reason: 'Master Admin Access Verified',
+    };
   }
 
+  // 2. Format 7-character clean key
+  const stripped = trimmed.toUpperCase().replace(/^ATM[-_\s]?/, '').replace(/[^A-Z0-9]/g, '');
+  if (stripped.length !== 7) {
+    return {
+      valid: false,
+      role: 'user',
+      reason: 'Invalid License Key. Please enter a valid 7-digit ATM Key or request access from Support.',
+    };
+  }
+
+  const clientDeviceId = getClientDeviceId();
+  const clientDeviceName = getDeviceHumanName();
+
   try {
-    const clientDeviceId = getClientDeviceId();
-    const clientDeviceName = getDeviceHumanName();
     const res = await fetch('/api/auth/verify-license', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        key: input.trim(),
+        key: `ATM-${stripped}`,
         deviceId: clientDeviceId,
         deviceName: clientDeviceName,
       }),
@@ -693,64 +700,134 @@ export const verifyLicenseKeyOnline = async (input: string): Promise<ValidationR
       return {
         valid: false,
         role: 'user',
-        license: localResult.license,
-        reason: data.message || localResult.reason || 'Authentication failed.',
+        reason: data.message || 'Authentication failed. Please contact Support.',
       };
     }
+
+    if (data.license) {
+      // Sync authoritative server license into local client cache
+      const existing = getIssuedLicenses();
+      const idx = existing.findIndex(l => l.cleanKey === stripped || l.id === data.license.id);
+      if (idx !== -1) {
+        existing[idx] = data.license;
+      } else {
+        existing.unshift(data.license);
+      }
+      saveIssuedLicenses(existing);
+    }
+
     return {
       valid: true,
       role: 'user',
-      license: data.license || localResult.license,
+      license: data.license,
     };
   } catch {
-    // Network offline or standalone environment fallback
+    // Offline fallback: check locally stored licenses
+    const localResult = validateLicenseCode(input);
     return localResult;
   }
 };
 
 /**
- * Renews / Extends an existing license by adding extra days.
+ * Renews / Extends an existing license by adding extra days on Server & Locally.
  */
-export const renewLicense = (licenseId: string, daysToAdd: number = 30): LicenseKey | null => {
+export const renewLicense = async (licenseId: string, daysToAdd: number = 30): Promise<LicenseKey | null> => {
   const licenses = getIssuedLicenses();
   const idx = licenses.findIndex((l) => l.id === licenseId || l.key === licenseId || l.cleanKey === licenseId);
-  if (idx === -1) return null;
+  const targetKey = idx !== -1 ? licenses[idx].cleanKey : licenseId;
 
+  // 1. Sync to Server (Master Authority)
+  try {
+    const res = await fetch('/api/admin/renew-license', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ licenseId, key: targetKey, daysToAdd }),
+    });
+    const data = await res.json();
+    if (data?.license) {
+      if (idx !== -1) {
+        licenses[idx] = data.license;
+      } else {
+        licenses.unshift(data.license);
+      }
+      saveIssuedLicenses(licenses);
+      return data.license;
+    }
+  } catch (e) {
+    console.warn('Server renew sync error', e);
+  }
+
+  // Local fallback
+  if (idx === -1) return null;
   const license = licenses[idx];
   const baseTime = license.expiresAt && license.expiresAt > Date.now() ? license.expiresAt : Date.now();
   const newExpiresAt = baseTime + daysToAdd * 24 * 60 * 60 * 1000;
-
   licenses[idx] = {
     ...license,
     expiresAt: newExpiresAt,
     status: 'active',
   };
-
   saveIssuedLicenses(licenses);
   return licenses[idx];
 };
 
 /**
- * Toggles suspension of a license key (Remote Kill-Switch)
+ * Toggles suspension of a license key (Remote Kill-Switch) on Server & Locally
  */
-export const toggleSuspendLicense = (licenseId: string): LicenseKey | null => {
+export const toggleSuspendLicense = async (licenseId: string): Promise<LicenseKey | null> => {
   const licenses = getIssuedLicenses();
   const idx = licenses.findIndex((l) => l.id === licenseId || l.key === licenseId || l.cleanKey === licenseId);
-  if (idx === -1) return null;
+  const targetKey = idx !== -1 ? licenses[idx].cleanKey : licenseId;
 
+  // 1. Sync to Server (Remote Kill-Switch)
+  try {
+    const res = await fetch('/api/admin/toggle-suspend', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ licenseId, key: targetKey }),
+    });
+    const data = await res.json();
+    if (data?.license) {
+      if (idx !== -1) {
+        licenses[idx] = data.license;
+      } else {
+        licenses.unshift(data.license);
+      }
+      saveIssuedLicenses(licenses);
+      return data.license;
+    }
+  } catch (e) {
+    console.warn('Server toggle suspend error', e);
+  }
+
+  // Local fallback
+  if (idx === -1) return null;
   const current = licenses[idx];
   const nextStatus = current.status === 'suspended' ? 'active' : 'suspended';
   licenses[idx] = { ...current, status: nextStatus };
-
   saveIssuedLicenses(licenses);
   return licenses[idx];
 };
 
 /**
- * Deletes a license key completely
+ * Deletes a license key completely on Server & Locally
  */
-export const deleteLicense = (licenseId: string): boolean => {
+export const deleteLicense = async (licenseId: string): Promise<boolean> => {
   const licenses = getIssuedLicenses();
+  const target = licenses.find((l) => l.id === licenseId || l.key === licenseId || l.cleanKey === licenseId);
+  const targetKey = target?.cleanKey || licenseId;
+
+  // 1. Delete on Server
+  try {
+    await fetch('/api/admin/delete-license', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ licenseId, key: targetKey }),
+    });
+  } catch (e) {
+    console.warn('Server delete license error', e);
+  }
+
   const updated = licenses.filter((l) => !(l.id === licenseId || l.key === licenseId || l.cleanKey === licenseId));
   saveIssuedLicenses(updated);
   return true;
