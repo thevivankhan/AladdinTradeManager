@@ -1422,7 +1422,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
                     value={digit}
                     onChange={(e) => handleDigitChange(idx, e.target.value)}
                     onKeyDown={(e) => handleDigitKeyDown(idx, e)}
-                    className="w-7.5 sm:w-8 h-9.5 sm:h-10 text-center text-sm font-mono font-bold uppercase bg-[#090f1d] border border-slate-700/80 focus:border-fuchsia-400 focus:ring-1 focus:ring-fuchsia-500/30 text-white rounded-lg outline-none transition-all shadow-inner"
+                    className="w-7.5 sm:w-8 h-9.5 sm:h-10 text-center text-sm font-mono font-bold uppercase bg-[#18233c] hover:bg-[#1c2946] border border-slate-600/90 hover:border-slate-500 focus:border-fuchsia-400 focus:ring-1 focus:ring-fuchsia-500/40 text-white rounded-lg outline-none transition-all shadow-[inset_0_1px_3px_rgba(0,0,0,0.4)]"
                   />
                 ))}
               </div>
