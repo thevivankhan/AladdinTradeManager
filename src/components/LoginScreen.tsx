@@ -331,21 +331,21 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           {/* TAB 1: ACCESS KEY SIGN IN */}
           {activeTab === "key" && !submittedApp && (
             <form onSubmit={handleKeySubmit} className="space-y-3.5">
-              <div>
-                <label className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5 mb-1.5">
+              <div className="flex flex-col items-center">
+                <label className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider flex items-center justify-center gap-1.5 mb-2 text-center">
                   <Key className="w-3.5 h-3.5 text-emerald-400" />
                   <span>Enter Cryptographic Access Key</span>
                 </label>
 
-                {/* Compact Rectangular Box tailored to 7 keys with elevated fill */}
-                <div className="flex items-center gap-2 p-1.5 rounded-md border border-slate-600/90 bg-[#18233c] hover:bg-[#1c2946] hover:border-slate-500 focus-within:border-emerald-400 focus-within:ring-1 focus-within:ring-emerald-500/40 transition-all shadow-[inset_0_1px_3px_rgba(0,0,0,0.4)] w-full max-w-[260px]">
+                {/* Ultra-Compact Rectangular Box Tailored Snugly to 7 Keys & Horizontally Centered */}
+                <div className="flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md border border-slate-600/90 bg-[#18233c] hover:bg-[#1c2946] hover:border-slate-500 focus-within:border-emerald-400 focus-within:ring-1 focus-within:ring-emerald-500/40 transition-all shadow-[inset_0_1px_3px_rgba(0,0,0,0.4)] mx-auto w-fit">
                   {/* Button-like ATM Prefix Tab (Non-clickable, Visual Tag) */}
-                  <div className="px-2.5 py-1 rounded bg-gradient-to-b from-emerald-500/25 to-teal-500/15 border border-emerald-500/40 text-emerald-300 font-mono font-bold text-xs tracking-wider select-none pointer-events-none shadow-sm flex items-center gap-0.5 shrink-0">
+                  <div className="px-2 py-0.5 rounded bg-gradient-to-b from-emerald-500/25 to-teal-500/15 border border-emerald-500/40 text-emerald-300 font-mono font-bold text-[11px] tracking-wider select-none pointer-events-none shadow-sm flex items-center gap-0.5 shrink-0">
                     <span>ATM</span>
                     <span className="text-emerald-500/70 font-semibold">-</span>
                   </div>
 
-                  {/* Clean 7-Digit Key Input */}
+                  {/* Snug 7-Digit Key Input */}
                   <input
                     type="text"
                     required
@@ -357,11 +357,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                       const clean = raw.replace(/^ATM[-_\s]?/, '').replace(/[^A-Z0-9]/g, '').slice(0, 7);
                       setKeyCodeInput(clean);
                     }}
-                    className="w-full bg-transparent text-emerald-100 placeholder:text-slate-400 text-xs sm:text-sm font-mono font-bold tracking-[0.22em] px-2 py-1 focus:outline-none uppercase"
+                    className="w-[90px] sm:w-[98px] bg-transparent text-emerald-100 placeholder:text-slate-400 text-xs sm:text-sm font-mono font-bold tracking-[0.2em] text-center px-1 py-0.5 focus:outline-none uppercase"
                   />
                 </div>
 
-                <div className="mt-2 flex items-center justify-between text-[11px] text-slate-400">
+                <div className="mt-2.5 flex items-center justify-center gap-2 text-[11px] text-slate-400 w-full">
                   <span className="flex items-center gap-1 text-slate-400">
                     <Shield className="w-3 h-3 text-emerald-400" />
                     <span>Hardware Anti-Piracy Lock:</span>
