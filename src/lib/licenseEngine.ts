@@ -472,9 +472,49 @@ export const resetLicenseDeviceLock = async (licenseId: string): Promise<boolean
   return true;
 };
 
+export const getPlanInfoFromKeyIndex = (index: number): { plan: LicenseKey['plan']; durationDays: number | null } => {
+  if (index >= 0 && index < 400) {
+    return { plan: '1 Month ($47)', durationDays: 30 };
+  } else if (index >= 400 && index < 600) {
+    return { plan: '3 Months ($97)', durationDays: 90 };
+  } else if (index >= 600 && index < 750) {
+    return { plan: '6 Months ($147)', durationDays: 180 };
+  } else if (index >= 750 && index < 900) {
+    return { plan: '1 Year ($197)', durationDays: 365 };
+  } else {
+    return { plan: 'Lifetime VIP ($247)', durationDays: null };
+  }
+};
+
+export const getTierRangeForPlan = (plan: string): { start: number; count: number } => {
+  if (plan.includes('1 Month')) return { start: 0, count: 400 };
+  if (plan.includes('3 Months')) return { start: 400, count: 200 };
+  if (plan.includes('6 Months')) return { start: 600, count: 150 };
+  if (plan.includes('1 Year')) return { start: 750, count: 150 };
+  return { start: 900, count: 100 };
+};
+
+export const getNextPointerForPlan = (plan: string): number => {
+  const range = getTierRangeForPlan(plan);
+  const key = `atm_vault_ptr_${range.start}`;
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? parseInt(raw, 10) : 0;
+  } catch {
+    return 0;
+  }
+};
+
+export const setNextPointerForPlan = (plan: string, idx: number) => {
+  const range = getTierRangeForPlan(plan);
+  const key = `atm_vault_ptr_${range.start}`;
+  try {
+    localStorage.setItem(key, (idx % range.count).toString());
+  } catch {}
+};
+
 /**
- * Issues a new License Key from the 1,000 circular chain.
- * The key is automatically moved to the back of the queue!
+ * Issues a new License Key from the 1,000 circular chain based on the chosen plan tier.
  */
 export const issueNewLicense = (
   traderName: string,
@@ -482,9 +522,11 @@ export const issueNewLicense = (
   traderPhone?: string,
   customDays?: number
 ): LicenseKey => {
-  const pointer = getNextPointerIndex();
-  const rawKey = CIRCULAR_POOL_1000[pointer % 1000];
-  setNextPointerIndex(pointer + 1);
+  const range = getTierRangeForPlan(plan);
+  const ptr = getNextPointerForPlan(plan);
+  const keyIdx = range.start + (ptr % range.count);
+  const rawKey = CIRCULAR_POOL_1000[keyIdx];
+  setNextPointerForPlan(plan, ptr + 1);
 
   let durationDays: number | null = 30;
   if (plan.includes('1 Month')) durationDays = 30;
@@ -576,12 +618,36 @@ export const validateLicenseCode = (input: string): ValidationResult => {
 
   const isInVault = VAULT_CLEAN_KEYS_SET.has(stripped);
 
-  if (foundIdx === -1) {
+  if (foundIdx === -1 && !isInVault) {
     return {
       valid: false,
       role: 'user',
-      reason: 'Invalid or Inactive License Key. Please contact Support to activate your 7-digit access key.',
+      reason: 'Invalid License Key. Please enter a valid 7-digit ATM Key or request access from Support.',
     };
+  }
+
+  // If key belongs to genuine 1,000 pool but wasn't pre-recorded on this device, activate with exact tier!
+  if (foundIdx === -1 && isInVault) {
+    const keyIndex = CIRCULAR_POOL_1000.findIndex(
+      (k) => k === normalizedFull || k.replace(/^ATM[-_\s]?/, '').toUpperCase().slice(0, 7) === stripped
+    );
+    const planInfo = getPlanInfoFromKeyIndex(keyIndex);
+    const now = Date.now();
+    const expiresAt = planInfo.durationDays ? now + planInfo.durationDays * 24 * 60 * 60 * 1000 : null;
+
+    const vaultLicense: LicenseKey = {
+      id: `lic-vault-${now}-${stripped}`,
+      key: `ATM-${stripped}`,
+      cleanKey: stripped,
+      traderName: 'VIP Trader',
+      plan: planInfo.plan,
+      issuedAt: now,
+      expiresAt: expiresAt,
+      status: 'active',
+    };
+    licenses.unshift(vaultLicense);
+    saveIssuedLicenses(licenses);
+    foundIdx = 0;
   }
 
   const found = licenses[foundIdx];

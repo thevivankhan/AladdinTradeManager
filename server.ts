@@ -175,6 +175,20 @@ const VAULT_CLEAN_SET = new Set(
   CIRCULAR_POOL_1000.map((k) => k.replace(/^ATM[-_\s]?/, '').toUpperCase().slice(0, 7))
 );
 
+function getPlanInfoFromKeyIndex(index: number) {
+  if (index >= 0 && index < 400) {
+    return { plan: '1 Month ($47)', durationDays: 30 };
+  } else if (index >= 400 && index < 600) {
+    return { plan: '3 Months ($97)', durationDays: 90 };
+  } else if (index >= 600 && index < 750) {
+    return { plan: '6 Months ($147)', durationDays: 180 };
+  } else if (index >= 750 && index < 900) {
+    return { plan: '1 Year ($197)', durationDays: 365 };
+  } else {
+    return { plan: 'Lifetime VIP ($247)', durationDays: null };
+  }
+}
+
 // --- Hardware Device Locks Store (1 Key = 1 Device Anti-Piracy) ---
 const deviceLocksPath = path.join(__dirname, 'device_locks.json');
 let deviceLocks: Record<string, { deviceId: string; deviceName: string; boundAt: number; key: string }> = {};
@@ -211,17 +225,43 @@ app.post('/api/auth/verify-license', (req, res) => {
       });
     }
 
-    // 1. Check if key is registered and issued by Admin
+    // 1. Check if key is registered in licensesData OR in deterministic 1,000 vault
     const licenses = licensesData.licenses || [];
     let foundIdx = licenses.findIndex(
       (l: any) => l.cleanKey === clean || l.key === normalized || l.key === key.trim().toUpperCase()
     );
 
-    if (foundIdx === -1) {
+    const keyIndex = CIRCULAR_POOL_1000.findIndex(
+      (k) => k === normalized || k.replace(/^ATM[-_\s]?/, '').toUpperCase().slice(0, 7) === clean
+    );
+
+    if (foundIdx === -1 && keyIndex === -1) {
       return res.status(403).json({
         success: false,
-        message: 'Invalid or Inactive License Key. Please contact Support to activate your 7-digit access key.'
+        message: 'Invalid License Key. Please enter a valid 7-digit ATM Key or request access from Support.'
       });
+    }
+
+    // Auto-bootstrap genuine 1,000 key with its exact mathematical duration tier!
+    if (foundIdx === -1 && keyIndex !== -1) {
+      const planInfo = getPlanInfoFromKeyIndex(keyIndex);
+      const now = Date.now();
+      const expiresAt = planInfo.durationDays ? now + planInfo.durationDays * 24 * 60 * 60 * 1000 : null;
+
+      const newLicense = {
+        id: `lic-vault-${now}-${clean}`,
+        key: normalized,
+        cleanKey: clean,
+        traderName: 'VIP Trader',
+        plan: planInfo.plan,
+        issuedAt: now,
+        expiresAt: expiresAt,
+        status: 'active',
+      };
+      licenses.unshift(newLicense);
+      licensesData.licenses = licenses;
+      saveLicenses();
+      foundIdx = 0;
     }
 
     const license = licenses[foundIdx];
