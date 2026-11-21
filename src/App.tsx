@@ -650,7 +650,145 @@ export default function App() {
   ); // Default 10% max daily loss
   const [maxConsecutiveLosses, setMaxConsecutiveLosses] = useState<number>(
     savedState?.maxConsecutiveLosses ?? 3,
-  ); // Default 3 consecutive losses
+  ); // Kept for state compatibility; Smart Anti-Shield strictly enforces 3 -> 3 -> 2 -> 2 (Repeatable)
+
+  // --- SMART ANTI-SHIELD (ESCALATING COOLDOWN ENGINE) ---
+  const SMART_SHIELD_STORAGE_KEY = "aladdin_smart_shield_v1";
+  const DRAWDOWN_LOCK_MS = 6 * 60 * 60 * 1000; // 6 Hours for Max Daily Loss %
+  const SHIELD_STAGES = [
+    {
+      stage: 1,
+      lossesRequired: 3,
+      durationMs: 15 * 60 * 1000,
+      shortLabel: "15m",
+      label: "15 Minutes",
+      tip: "Step away from the charts, hydrate, and review why the last 3 setups failed before returning.",
+    },
+    {
+      stage: 2,
+      lossesRequired: 3,
+      durationMs: 30 * 60 * 1000,
+      shortLabel: "30m",
+      label: "30 Minutes",
+      tip: "Tilt protection engaged. Take 30 minutes to reset — after unlock, Shield tightens automatically to 2 losses.",
+    },
+    {
+      stage: 3,
+      lossesRequired: 2,
+      durationMs: 60 * 60 * 1000,
+      shortLabel: "1h",
+      label: "1 Hour",
+      tip: "Market conditions may be choppy. A 1-hour break protects both your balance and your focus.",
+    },
+    {
+      stage: 4,
+      lossesRequired: 2,
+      durationMs: 3 * 60 * 60 * 1000,
+      shortLabel: "3h",
+      label: "3 Hours",
+      tip: "Deep 3-hour cooldown active. Wait for the next market session — repeats on 2 consecutive losses until you start a fresh session.",
+    },
+  ] as const;
+
+  interface SmartShieldState {
+    stage: number;
+    lockUntil: number | null;
+    lockDurationMs: number;
+    lockReason: "CONSECUTIVE" | "DRAWDOWN" | null;
+    activeLockStage: number;
+    baselineTradeIndex: number;
+    drawdownAcknowledgedAtBalance: number | null;
+  }
+
+  const DEFAULT_SHIELD_STATE: SmartShieldState = {
+    stage: 0,
+    lockUntil: null,
+    lockDurationMs: 0,
+    lockReason: null,
+    activeLockStage: 0,
+    baselineTradeIndex: -1,
+    drawdownAcknowledgedAtBalance: null,
+  };
+
+  const [shieldState, setShieldState] = useState<SmartShieldState>(() => {
+    try {
+      const raw = localStorage.getItem(SMART_SHIELD_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        return {
+          ...DEFAULT_SHIELD_STATE,
+          ...parsed,
+        };
+      }
+    } catch {}
+    return DEFAULT_SHIELD_STATE;
+  });
+
+  const [shieldNow, setShieldNow] = useState<number>(() => Date.now());
+  const lastWarnedTradeIdxRef = useRef<number>(-1);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(SMART_SHIELD_STORAGE_KEY, JSON.stringify(shieldState));
+    } catch {}
+  }, [shieldState]);
+
+  const formatShieldCountdown = (ms: number) => {
+    const totalSec = Math.max(0, Math.ceil(ms / 1000));
+    const hrs = Math.floor(totalSec / 3600);
+    const mins = Math.floor((totalSec % 3600) / 60);
+    const secs = totalSec % 60;
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return hrs > 0 ? `${pad(hrs)}:${pad(mins)}:${pad(secs)}` : `${pad(mins)}:${pad(secs)}`;
+  };
+
+  const playShieldSound = (type: "lock" | "unlock") => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const now = ctx.currentTime;
+      const freqs = type === "unlock" ? [523.25, 659.25, 783.99] : [330, 246.94];
+      freqs.forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = type === "unlock" ? "sine" : "triangle";
+        osc.frequency.setValueAtTime(freq, now + idx * 0.12);
+        gain.gain.setValueAtTime(0.001, now + idx * 0.12);
+        gain.gain.exponentialRampToValueAtTime(0.12, now + idx * 0.12 + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.12 + 0.35);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + idx * 0.12);
+        osc.stop(now + idx * 0.12 + 0.36);
+      });
+    } catch {}
+  };
+
+  const resetSmartShield = () => {
+    lastWarnedTradeIdxRef.current = -1;
+    setShieldState(DEFAULT_SHIELD_STATE);
+    try {
+      localStorage.setItem(SMART_SHIELD_STORAGE_KEY, JSON.stringify(DEFAULT_SHIELD_STATE));
+    } catch {}
+  };
+
+  const isShieldLocked = Boolean(shieldState.lockUntil && shieldNow < shieldState.lockUntil);
+  const shieldRemainingMs = shieldState.lockUntil
+    ? Math.max(0, shieldState.lockUntil - shieldNow)
+    : 0;
+
+  const checkAntiShieldBlock = (actionLabel: string): boolean => {
+    const liveRemaining = shieldState.lockUntil ? shieldState.lockUntil - Date.now() : 0;
+    if (liveRemaining > 0) {
+      showToast(
+        `🛡️ Smart Anti-Shield Active! ${actionLabel} blocked for ${formatShieldCountdown(liveRemaining)} until cooldown ends.`,
+        "error",
+      );
+      return true;
+    }
+    return false;
+  };
 
   const [activeHeaderTab, setActiveHeaderTab] = useState<
     | "NONE"
@@ -1695,12 +1833,14 @@ export default function App() {
     field: keyof TradeState,
     value: any,
   ) => {
+    if (checkAntiShieldBlock("Trading")) return;
     setTradesInput((prev) =>
       prev.map((t) => (t.id === id ? { ...t, [field]: value } : t)),
     );
   };
 
   const handleDeleteTrade = (id: number) => {
+    if (checkAntiShieldBlock("Deleting trades")) return;
     setTradesInput((prev) => {
       const filtered = prev.filter((t) => t.id !== id);
       const newRows = [
@@ -1714,6 +1854,7 @@ export default function App() {
 
   // Clears ONLY the trade log, keeps history and session count
   const clearBoard = (showNotification = true) => {
+    if (checkAntiShieldBlock("Clear")) return;
     setTradesInput(
       Array.from({ length: maxTrades }, (_, i) => ({
         id: i + 1,
@@ -1721,16 +1862,19 @@ export default function App() {
         customAmount: "",
       })),
     );
+    resetSmartShield();
     if (showNotification)
       showToast("Trade log cleared. History preserved.", "success");
   };
 
   // Hard Reset: Clears EVERYTHING back to Day 1
   const hardReset = () => {
+    if (checkAntiShieldBlock("Hard Reset")) return;
     confirmAction(
       "Hard Reset",
       "Are you sure you want to hard reset? This will clear ALL history, sessions, and reset everything back to Day 1.",
       () => {
+        if (checkAntiShieldBlock("Hard Reset")) return;
         setTradesInput(
           Array.from({ length: maxTrades }, (_, i) => ({
             id: i + 1,
@@ -1748,6 +1892,7 @@ export default function App() {
         }));
         setPastSessions([]);
         setSessionNotes("");
+        resetSmartShield();
         showToast("Hard Reset Complete. Back to Session 0.", "success");
       },
     );
@@ -1755,10 +1900,12 @@ export default function App() {
 
   // Reset Current Session: Clears trade log and resets capital to start of session
   const resetCurrentSession = () => {
+    if (checkAntiShieldBlock("Reset Session")) return;
     confirmAction(
       "Reset Session",
       "Are you sure you want to reset the current session? This will clear your current trades and reset the session capital without affecting history.",
       () => {
+        if (checkAntiShieldBlock("Reset Session")) return;
         setTradesInput(
           Array.from({ length: maxTrades }, (_, i) => ({
             id: i + 1,
@@ -1777,16 +1924,19 @@ export default function App() {
         setAlertedStatuses([]);
         setSessionNotes("");
         setCompletionModal({ show: false, type: "", message: "" });
+        resetSmartShield();
         showToast("Current session reset", "success");
       },
     );
   };
 
   const handleCompleteSession = () => {
+    if (checkAntiShieldBlock("Completing session")) return;
     setShowSessionSummary(true);
   };
 
   const executeCompleteSession = () => {
+    if (checkAntiShieldBlock("Completing session")) return;
     const newCapital = parseFloat(runningBalance.toFixed(2));
 
     // Save to past sessions
@@ -1843,11 +1993,12 @@ export default function App() {
       }
     }
 
-    // 6. Reset Alerts & Notes
+    // 6. Reset Alerts, Notes & Smart Anti-Shield for the fresh next session
     setAlertedStatuses([]);
     setSessionNotes("");
     setCompletionModal({ show: false, type: "", message: "" });
     setShowSessionSummary(false);
+    resetSmartShield();
 
     showToast(
       `Session Logged! Capital compounded to ${currency}${newCapital}`,
@@ -2739,8 +2890,7 @@ export default function App() {
     };
   };
 
-  const currentConsecutiveLosses = useMemo(() => {
-    let count = 0;
+  const { lastFilledTradeIndex, currentConsecutiveLosses } = useMemo(() => {
     let lastFilledIndex = -1;
     for (let i = tradesInput.length - 1; i >= 0; i--) {
       if (tradesInput[i].result !== "-") {
@@ -2748,8 +2898,9 @@ export default function App() {
         break;
       }
     }
-    if (lastFilledIndex !== -1) {
-      for (let i = lastFilledIndex; i >= 0; i--) {
+    let count = 0;
+    if (lastFilledIndex !== -1 && lastFilledIndex > shieldState.baselineTradeIndex) {
+      for (let i = lastFilledIndex; i > shieldState.baselineTradeIndex; i--) {
         if (tradesInput[i].result === "L") {
           count++;
         } else if (tradesInput[i].result === "W") {
@@ -2757,8 +2908,138 @@ export default function App() {
         }
       }
     }
-    return count;
-  }, [tradesInput]);
+    return { lastFilledTradeIndex: lastFilledIndex, currentConsecutiveLosses: count };
+  }, [tradesInput, shieldState.baselineTradeIndex]);
+
+  const nextShieldStageIdx = Math.min(shieldState.stage, SHIELD_STAGES.length - 1);
+  const nextShieldConfig = SHIELD_STAGES[nextShieldStageIdx];
+  const effectiveMaxConsecutiveLosses = nextShieldConfig.lossesRequired;
+  const isPreLockWarning =
+    !isShieldLocked && currentConsecutiveLosses === effectiveMaxConsecutiveLosses - 1;
+
+  // Live Countdown Ticker & Automatic Unlock Handler
+  useEffect(() => {
+    if (!shieldState.lockUntil) return;
+
+    const handleTick = () => {
+      const nowTs = Date.now();
+      setShieldNow(nowTs);
+
+      if (shieldState.lockUntil && nowTs >= shieldState.lockUntil) {
+        const wasDrawdownLock = shieldState.lockReason === "DRAWDOWN";
+        const upcomingStageCfg =
+          SHIELD_STAGES[Math.min(shieldState.stage, SHIELD_STAGES.length - 1)];
+
+        playShieldSound("unlock");
+        showToast(
+          wasDrawdownLock
+            ? "🛡️ 6h Daily Loss Shield Unlocked! Fresh Stage 1 (3 Losses) active."
+            : `🛡️ Smart Shield Unlocked! Stage ${upcomingStageCfg.stage}/4 active (${upcomingStageCfg.lossesRequired}L → ${upcomingStageCfg.shortLabel}${upcomingStageCfg.stage === 4 ? " ↻" : ""}) — Trade with discipline.`,
+          "success",
+        );
+
+        setShieldState((prev) => ({
+          ...prev,
+          stage: wasDrawdownLock ? 0 : Math.min(prev.stage, SHIELD_STAGES.length - 1),
+          lockUntil: null,
+          lockDurationMs: 0,
+          lockReason: null,
+          activeLockStage: 0,
+          baselineTradeIndex: Math.max(prev.baselineTradeIndex, lastFilledTradeIndex),
+        }));
+      }
+    };
+
+    handleTick();
+    const interval = setInterval(handleTick, 500);
+    const onFocusOrVisible = () => handleTick();
+    window.addEventListener("focus", onFocusOrVisible);
+    document.addEventListener("visibilitychange", onFocusOrVisible);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", onFocusOrVisible);
+      document.removeEventListener("visibilitychange", onFocusOrVisible);
+    };
+  }, [shieldState.lockUntil, shieldState.stage, shieldState.activeLockStage, shieldState.lockReason, lastFilledTradeIndex]);
+
+  // Automatic Smart Anti-Shield Trigger (Drawdown 6h + Escalating Consecutive Loss 15m -> 30m -> 1h -> 3h Repeatable)
+  useEffect(() => {
+    const nowTs = Date.now();
+    if (shieldState.lockUntil && nowTs < shieldState.lockUntil) return;
+
+    const lockThreshold = accumulatedStats.startingCapital * (1 - maxDailyLoss / 100);
+    const hasHitNewDrawdown =
+      tCount > 0 &&
+      runningBalance <= lockThreshold &&
+      (shieldState.drawdownAcknowledgedAtBalance === null ||
+        runningBalance < shieldState.drawdownAcknowledgedAtBalance - 0.005);
+
+    if (hasHitNewDrawdown) {
+      const unlockAt = nowTs + DRAWDOWN_LOCK_MS;
+      setShieldNow(nowTs);
+      setShieldState((prev) => ({
+        ...prev,
+        lockUntil: unlockAt,
+        lockDurationMs: DRAWDOWN_LOCK_MS,
+        lockReason: "DRAWDOWN",
+        activeLockStage: 0,
+        baselineTradeIndex: lastFilledTradeIndex,
+        drawdownAcknowledgedAtBalance: runningBalance,
+      }));
+      playShieldSound("lock");
+      showToast(
+        `🛡️ Max Daily Loss (${maxDailyLoss}%) Hit! 6-Hour Anti-Shield Engaged to protect your capital.`,
+        "error",
+      );
+      return;
+    }
+
+    if (
+      currentConsecutiveLosses >= effectiveMaxConsecutiveLosses &&
+      lastFilledTradeIndex > shieldState.baselineTradeIndex
+    ) {
+      const unlockAt = nowTs + nextShieldConfig.durationMs;
+      setShieldNow(nowTs);
+      setShieldState((prev) => ({
+        ...prev,
+        stage: Math.min(nextShieldConfig.stage, SHIELD_STAGES.length - 1),
+        lockUntil: unlockAt,
+        lockDurationMs: nextShieldConfig.durationMs,
+        lockReason: "CONSECUTIVE",
+        activeLockStage: nextShieldConfig.stage,
+        baselineTradeIndex: lastFilledTradeIndex,
+      }));
+      playShieldSound("lock");
+      showToast(
+        `🛡️ Smart Shield Stage ${nextShieldConfig.stage}/4 Engaged — ${nextShieldConfig.label} Cooldown Active!`,
+        "error",
+      );
+    }
+  }, [
+    currentConsecutiveLosses,
+    effectiveMaxConsecutiveLosses,
+    lastFilledTradeIndex,
+    runningBalance,
+    tCount,
+    maxDailyLoss,
+    accumulatedStats.startingCapital,
+    shieldState.lockUntil,
+    shieldState.baselineTradeIndex,
+    shieldState.drawdownAcknowledgedAtBalance,
+    nextShieldConfig,
+  ]);
+
+  // Pre-Lock Warning Alert (1 loss away from triggering shield)
+  useEffect(() => {
+    if (isPreLockWarning && lastFilledTradeIndex > lastWarnedTradeIdxRef.current) {
+      lastWarnedTradeIdxRef.current = lastFilledTradeIndex;
+      showToast(
+        `⚠️ Shield Warning: 1 more loss triggers ${nextShieldConfig.label} Lock! Wait for A+ setup.`,
+        "warning",
+      );
+    }
+  }, [isPreLockWarning, lastFilledTradeIndex, nextShieldConfig]);
 
 
   if (!isAuthReady) {
@@ -3182,9 +3463,29 @@ export default function App() {
                               : "RISK_LOCK",
                           )
                         }
-                        className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center gap-1 shrink-0 justify-center whitespace-nowrap ${activeHeaderTab === "RISK_LOCK" ? "bg-rose-500/20 text-rose-400" : "text-slate-400 hover:text-slate-200 hover:bg-slate-800"}`}
+                        className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center gap-1 shrink-0 justify-center whitespace-nowrap ${
+                          isShieldLocked
+                            ? "bg-rose-500/25 text-rose-300 border border-rose-500/50 animate-pulse"
+                            : isPreLockWarning
+                              ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                              : activeHeaderTab === "RISK_LOCK"
+                                ? "bg-rose-500/20 text-rose-400"
+                                : "text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+                        }`}
                       >
-                        <Lock className="w-3 h-3" /> Risk Lock
+                        {isShieldLocked ? (
+                          <>
+                            <Lock className="w-3 h-3" /> {formatShieldCountdown(shieldRemainingMs)}
+                          </>
+                        ) : isPreLockWarning ? (
+                          <>
+                            <AlertTriangle className="w-3 h-3" /> Risk Lock
+                          </>
+                        ) : (
+                          <>
+                            <Lock className="w-3 h-3" /> Risk Lock
+                          </>
+                        )}
                       </button>
                       <button
                         onClick={() =>
@@ -3268,10 +3569,12 @@ export default function App() {
                     </span>
                     <button
                       onClick={() => {
+                        if (checkAntiShieldBlock("Clear Trade Log")) return;
                         confirmAction(
                           "Clear Trade Log",
                           "Are you sure you want to clear the trade log? This will reset the current session.",
                           () => {
+                            if (checkAntiShieldBlock("Clear Trade Log")) return;
                             setTradesInput(
                               Array.from({ length: maxTrades }, (_, i) => ({
                                 id: i + 1,
@@ -3285,6 +3588,7 @@ export default function App() {
                               type: "",
                               message: "",
                             });
+                            resetSmartShield();
                             showToast("Trade log cleared", "success");
                           },
                         );
@@ -3357,29 +3661,41 @@ export default function App() {
                             )
                           : 0;
 
-                      const isDrawdownLocked = runningBalance <= lockThreshold;
-                      const isConsecutiveLossLocked =
-                        currentConsecutiveLosses >= maxConsecutiveLosses;
-                      const isLocked =
-                        isDrawdownLocked || isConsecutiveLossLocked;
+                      const isLocked = isShieldLocked;
+                      const cooldownPct =
+                        isLocked && shieldState.lockDurationMs > 0
+                          ? Math.min(
+                              100,
+                              Math.max(
+                                0,
+                                (shieldRemainingMs / shieldState.lockDurationMs) * 100,
+                              ),
+                            )
+                          : 0;
+                      const unlockTimeLabel = shieldState.lockUntil
+                        ? new Date(shieldState.lockUntil).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                        : "";
 
                       return (
                         <>
                           <div className="flex items-center justify-between mb-4">
                             <h3 className="text-sm font-bold text-rose-400 flex items-center gap-2 uppercase tracking-wider">
-                              <Lock className="w-4 h-4" /> Risk Lock & Enforcer
+                              <ShieldAlert className="w-4 h-4" /> Risk Lock & Smart Shield
                             </h3>
                             <div className="flex items-center gap-2">
                               <button
                                 onClick={() => {
                                   confirmAction(
-                                    "How Risk Lock Works",
-                                    "1. Set your Max Daily Loss % and Max Consecutive Losses.\n2. The app monitors your balance and losing streaks in real-time.\n3. If you hit either limit, the trading interface will be LOCKED.\n4. This prevents revenge trading and protects your capital.\n5. To unlock, you must manually increase your limits or reset the session (not recommended if you are tilted!).",
+                                    "How Smart Anti-Shield Works",
+                                    "1. Stage 1: 3 consecutive losses → 15m auto-lock.\n2. Stage 2: 3 consecutive losses → 30m auto-lock (box auto-switches to 2 after unlock).\n3. Stage 3: 2 consecutive losses → 1h auto-lock.\n4. Stage 4: 2 consecutive losses → 3h auto-lock (Repeatable in same session).\n5. Max Daily Loss % hit → 6h protective lock.\n6. Anti-Cheat: Refresh, Reset, and Clear cannot bypass active timers. Unlocks automatically at 00:00.",
                                     () => {},
                                   );
                                 }}
                                 className="text-slate-400 hover:text-blue-400 transition-colors"
-                                title="How it works"
+                                title="How Smart Shield works"
                               >
                                 <Info className="w-4 h-4" />
                               </button>
@@ -3394,22 +3710,45 @@ export default function App() {
 
                           {/* Status Dashboard */}
                           <div
-                            className={`mb-4 rounded-xl border p-4 relative overflow-hidden ${isLocked ? "bg-rose-900/20 border-rose-500/50" : "bg-slate-800/80 border-slate-700/50"}`}
+                            className={`mb-4 rounded-xl border p-4 relative overflow-hidden ${
+                              isLocked
+                                ? "bg-rose-950/35 border-rose-500/50"
+                                : isPreLockWarning
+                                  ? "bg-amber-950/25 border-amber-500/45"
+                                  : "bg-slate-800/80 border-slate-700/50"
+                            }`}
                           >
                             {isLocked && (
                               <div className="absolute inset-0 bg-gradient-to-r from-rose-500/10 to-transparent pointer-events-none animate-pulse" />
                             )}
                             <div className="flex justify-between items-end mb-3 relative z-10">
                               <div>
-                                <div className="text-[10px] uppercase tracking-widest font-bold mb-1 flex items-center gap-1 text-slate-400">
-                                  Status
+                                <div className="text-[10px] uppercase tracking-widest font-bold mb-1 flex items-center gap-1.5 text-slate-400">
+                                  <span>Status</span>
+                                  {isLocked && (
+                                    <span className="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[9px] font-mono">
+                                      {shieldState.lockReason === "DRAWDOWN"
+                                        ? "DAILY LOSS 6h"
+                                        : `STAGE ${shieldState.activeLockStage}/4`}
+                                    </span>
+                                  )}
                                 </div>
                                 <div
-                                  className={`text-2xl font-black tracking-wider flex items-center gap-2 ${isLocked ? "text-rose-500" : "text-emerald-400"}`}
+                                  className={`text-2xl font-black tracking-wider flex items-center gap-2 ${
+                                    isLocked
+                                      ? "text-rose-500"
+                                      : isPreLockWarning
+                                        ? "text-amber-400"
+                                        : "text-emerald-400"
+                                  }`}
                                 >
                                   {isLocked ? (
                                     <>
                                       <Lock className="w-6 h-6" /> LOCKED
+                                    </>
+                                  ) : isPreLockWarning ? (
+                                    <>
+                                      <AlertTriangle className="w-6 h-6 animate-pulse" /> WARNING
                                     </>
                                   ) : (
                                     <>
@@ -3419,46 +3758,136 @@ export default function App() {
                                 </div>
                               </div>
                               <div className="text-right">
-                                <div className="text-[10px] text-slate-400 uppercase tracking-widest font-bold mb-1">
-                                  Current Drawdown
-                                </div>
-                                <div
-                                  className={`text-xl font-bold font-mono flex items-baseline gap-1 justify-end ${drawdownPercentage > 80 ? "text-rose-400" : "text-amber-400"}`}
-                                >
-                                  {formatMoney(currentDrawdown)}{" "}
-                                  <span className="text-xs text-slate-500 font-medium font-sans">
-                                    / {formatMoney(maxDrawdownAmount)}
-                                  </span>
-                                </div>
+                                {isLocked ? (
+                                  <>
+                                    <div className="text-[10px] text-rose-300 uppercase tracking-widest font-bold mb-0.5 flex items-center justify-end gap-1">
+                                      <Clock className="w-3 h-3" /> Auto-Unlock In
+                                    </div>
+                                    <div className="text-2xl font-black font-mono tabular-nums text-white tracking-wider">
+                                      {formatShieldCountdown(shieldRemainingMs)}
+                                    </div>
+                                    <div className="text-[10px] text-slate-400 font-mono">
+                                      Unlocks at {unlockTimeLabel}
+                                    </div>
+                                  </>
+                                ) : (
+                                  <>
+                                    <div className="text-[10px] text-slate-400 uppercase tracking-widest font-bold mb-1">
+                                      Current Drawdown
+                                    </div>
+                                    <div
+                                      className={`text-xl font-bold font-mono flex items-baseline gap-1 justify-end ${drawdownPercentage > 80 ? "text-rose-400" : "text-amber-400"}`}
+                                    >
+                                      {formatMoney(currentDrawdown)}{" "}
+                                      <span className="text-xs text-slate-500 font-medium font-sans">
+                                        / {formatMoney(maxDrawdownAmount)}
+                                      </span>
+                                    </div>
+                                  </>
+                                )}
                               </div>
                             </div>
 
-                            {/* Drawdown Progress Bar */}
+                            {/* Pre-Lock Warning Banner */}
+                            {isPreLockWarning && (
+                              <div className="mb-3 px-3 py-2 rounded-lg bg-amber-500/15 border border-amber-500/35 text-amber-200 text-xs font-semibold flex items-center gap-2 relative z-10">
+                                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                                <span>
+                                  1 more loss triggers{" "}
+                                  <strong className="text-white">{nextShieldConfig.label}</strong>{" "}
+                                  Smart Shield Lock (Stage {nextShieldConfig.stage}/4). Wait for an A+ setup!
+                                </span>
+                              </div>
+                            )}
+
+                            {/* Progress Bar: Shrinking Cooldown Timer when Locked, Drawdown Bar when Unlocked */}
                             <div className="w-full bg-slate-900 rounded-full h-2 mt-2 border border-slate-700/50 overflow-hidden relative z-10">
                               <div
-                                className={`h-full rounded-full transition-all duration-500 ease-out ${drawdownPercentage > 80 ? "bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.5)]" : drawdownPercentage > 50 ? "bg-amber-500" : "bg-emerald-500"}`}
-                                style={{ width: `${drawdownPercentage}%` }}
+                                className={`h-full rounded-full transition-all duration-500 ease-out ${
+                                  isLocked
+                                    ? "bg-gradient-to-r from-rose-500 to-amber-500 shadow-[0_0_10px_rgba(244,63,94,0.5)]"
+                                    : drawdownPercentage > 80
+                                      ? "bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.5)]"
+                                      : drawdownPercentage > 50
+                                        ? "bg-amber-500"
+                                        : "bg-emerald-500"
+                                }`}
+                                style={{ width: `${isLocked ? cooldownPct : drawdownPercentage}%` }}
                               ></div>
+                            </div>
+
+                            {/* 4-Stage Escalating Smart Shield Ladder (Repeatable 3h Max) */}
+                            <div className="mt-3 pt-3 border-t border-slate-700/50 relative z-10">
+                              <div className="flex items-center justify-between text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-2">
+                                <span>Smart Anti-Shield Ladder (Same Session)</span>
+                                <span className="text-emerald-400">Auto-Unlock</span>
+                              </div>
+                              <div className="grid grid-cols-4 gap-1.5">
+                                {SHIELD_STAGES.map((st) => {
+                                  const isCurrentlyLockedHere =
+                                    isLocked &&
+                                    shieldState.lockReason === "CONSECUTIVE" &&
+                                    shieldState.activeLockStage === st.stage;
+                                  const isCompleted =
+                                    st.stage < 4 &&
+                                    shieldState.stage >= st.stage &&
+                                    !isCurrentlyLockedHere;
+                                  const isNextUp =
+                                    !isLocked && nextShieldConfig.stage === st.stage;
+
+                                  return (
+                                    <div
+                                      key={st.stage}
+                                      className={`rounded-lg px-1.5 py-1.5 text-center border transition-all ${
+                                        isCurrentlyLockedHere
+                                          ? "bg-rose-500/25 border-rose-400 text-rose-200 shadow-[0_0_12px_rgba(244,63,94,0.35)]"
+                                          : isCompleted
+                                            ? "bg-slate-900/90 border-slate-700 text-slate-500 line-through"
+                                            : isNextUp
+                                              ? "bg-emerald-500/15 border-emerald-500/50 text-emerald-300"
+                                              : "bg-slate-900/60 border-slate-800 text-slate-400"
+                                      }`}
+                                    >
+                                      <div className="text-[10px] font-black font-mono leading-tight">
+                                        {st.shortLabel}
+                                      </div>
+                                      <div className="text-[8px] font-bold uppercase opacity-80">
+                                        {st.lossesRequired}L{st.stage === 4 ? " ↻" : ""}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
                             </div>
                           </div>
 
                           {/* Settings Grid */}
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-800/50 p-3 rounded-xl border border-slate-700/50">
                             <div className="bg-slate-800 p-3 rounded-lg border border-slate-700">
-                              <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2 block">
-                                Max Daily Loss %
-                              </label>
+                              <div className="flex items-center justify-between mb-2">
+                                <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                                  Max Daily Loss %
+                                </label>
+                                <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                                  6h Lock
+                                </span>
+                              </div>
                               <div className="flex items-center gap-3">
                                 <div className="relative flex-1">
                                   <input
                                     type="number"
                                     min="1"
                                     max="100"
+                                    disabled={isLocked}
                                     value={maxDailyLoss}
-                                    onChange={(e) =>
-                                      setMaxDailyLoss(Number(e.target.value))
-                                    }
-                                    className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white font-mono focus:border-rose-500 focus:ring-1 focus:ring-rose-500 outline-none transition-all"
+                                    onChange={(e) => {
+                                      if (isLocked) return;
+                                      const val = Math.min(100, Math.max(1, Number(e.target.value) || 1));
+                                      setMaxDailyLoss(val);
+                                    }}
+                                    className={`w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white font-mono focus:border-rose-500 focus:ring-1 focus:ring-rose-500 outline-none transition-all ${
+                                      isLocked ? "opacity-50 cursor-not-allowed" : ""
+                                    }`}
                                   />
                                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">
                                     %
@@ -3476,34 +3905,42 @@ export default function App() {
                             </div>
 
                             <div className="bg-slate-800 p-3 rounded-lg border border-slate-700">
-                              <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2 block">
-                                Max Consecutive Losses
-                              </label>
+                              <div className="flex items-center justify-between mb-2">
+                                <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                                  Max Consecutive Losses
+                                </label>
+                                <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                                  Auto Shield • {nextShieldConfig.shortLabel}
+                                </span>
+                              </div>
                               <div className="flex items-center gap-3">
                                 <div className="relative flex-1">
-                                  <input
-                                    type="number"
-                                    min="1"
-                                    max="100"
-                                    value={maxConsecutiveLosses}
-                                    onChange={(e) =>
-                                      setMaxConsecutiveLosses(
-                                        Number(e.target.value),
-                                      )
-                                    }
-                                    className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white font-mono focus:border-rose-500 focus:ring-1 focus:ring-rose-500 outline-none transition-all"
-                                  />
+                                  <div
+                                    title="Fixed Smart Anti-Shield: 15m (3L) → 30m (3L) → Auto-switches to 2L for 1h & 3h Repeatable"
+                                    className="w-full bg-slate-900/90 border border-slate-600/80 rounded-lg px-3 py-2 text-sm text-white font-mono font-bold flex items-center justify-between select-none cursor-not-allowed"
+                                  >
+                                    <span>{effectiveMaxConsecutiveLosses}</span>
+                                    <Lock className="w-3.5 h-3.5 text-slate-500" />
+                                  </div>
                                 </div>
                                 <div className="text-right min-w-[80px]">
                                   <div className="text-[9px] text-slate-500 uppercase">
                                     Current
                                   </div>
                                   <div
-                                    className={`text-sm font-mono font-bold ${currentConsecutiveLosses >= maxConsecutiveLosses ? "text-rose-500" : currentConsecutiveLosses > 0 ? "text-amber-400" : "text-emerald-400"}`}
+                                    className={`text-sm font-mono font-bold ${
+                                      isLocked
+                                        ? "text-rose-500"
+                                        : isPreLockWarning
+                                          ? "text-amber-400"
+                                          : currentConsecutiveLosses > 0
+                                            ? "text-amber-400"
+                                            : "text-emerald-400"
+                                    }`}
                                   >
                                     {currentConsecutiveLosses}{" "}
                                     <span className="text-slate-500 text-xs">
-                                      / {maxConsecutiveLosses}
+                                      / {effectiveMaxConsecutiveLosses}
                                     </span>
                                   </div>
                                 </div>
@@ -4258,44 +4695,80 @@ export default function App() {
                 </div>
 
                 <div className="overflow-x-auto max-h-[580px] custom-scrollbar relative">
-                  {(runningBalance <=
-                    accumulatedStats.startingCapital *
-                      (1 - maxDailyLoss / 100) ||
-                    currentConsecutiveLosses >= maxConsecutiveLosses) && (
-                    <div className="absolute inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-300 border-t border-rose-500/30">
-                      <div className="bg-rose-500/20 p-5 rounded-full mb-4 shadow-[0_0_30px_rgba(244,63,94,0.3)]">
-                        <Lock className="w-12 h-12 text-rose-500" />
+                  {isShieldLocked && (() => {
+                    const activeStageObj =
+                      SHIELD_STAGES.find((s) => s.stage === shieldState.activeLockStage) ||
+                      SHIELD_STAGES[0];
+                    const cooldownPct =
+                      shieldState.lockDurationMs > 0
+                        ? Math.min(
+                            100,
+                            Math.max(0, (shieldRemainingMs / shieldState.lockDurationMs) * 100),
+                          )
+                        : 0;
+                    const unlockAtStr = shieldState.lockUntil
+                      ? new Date(shieldState.lockUntil).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      : "";
+                    const guidanceTip =
+                      shieldState.lockReason === "DRAWDOWN"
+                        ? "You reached your Max Daily Loss limit. Step away for 6 hours to protect your capital and return with a fresh mindset."
+                        : activeStageObj.tip;
+
+                    return (
+                      <div className="absolute inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-center p-5 text-center animate-in fade-in duration-300 border-t border-rose-500/40">
+                        <div className="bg-rose-500/20 p-4 rounded-full mb-3 border border-rose-500/40 shadow-[0_0_35px_rgba(244,63,94,0.35)]">
+                          <ShieldAlert className="w-10 h-10 text-rose-400" />
+                        </div>
+
+                        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-500/15 border border-rose-500/35 text-[10px] font-black uppercase tracking-widest text-rose-300 mb-2">
+                          <Lock className="w-3 h-3" />
+                          {shieldState.lockReason === "DRAWDOWN"
+                            ? `Daily Loss Shield (${maxDailyLoss}%) • 6h Cooldown`
+                            : `Smart Shield Stage ${shieldState.activeLockStage}/4 • ${activeStageObj.label} Cooldown`}
+                        </div>
+
+                        <h3 className="text-xl sm:text-2xl font-black text-white uppercase tracking-widest mb-2 drop-shadow-md">
+                          Smart Anti-Shield Active
+                        </h3>
+
+                        {/* Live Reverse Countdown Box */}
+                        <div className="bg-slate-900/95 border border-rose-500/40 rounded-2xl px-6 py-3 mb-3 shadow-[0_0_25px_rgba(244,63,94,0.18)] w-full max-w-xs">
+                          <div className="text-[10px] uppercase tracking-widest text-slate-400 font-bold mb-1 flex items-center justify-center gap-1">
+                            <Clock className="w-3 h-3 text-rose-400" /> Auto-Unlock Countdown
+                          </div>
+                          <div className="text-3xl sm:text-4xl font-black font-mono tabular-nums text-rose-400 tracking-wider">
+                            {formatShieldCountdown(shieldRemainingMs)}
+                          </div>
+                          <div className="w-full bg-slate-800 rounded-full h-1.5 mt-2.5 overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-rose-500 to-amber-400 rounded-full transition-all duration-500"
+                              style={{ width: `${cooldownPct}%` }}
+                            />
+                          </div>
+                          <div className="text-[10px] text-slate-400 font-mono mt-1.5">
+                            Auto-unlocks at <span className="text-emerald-400 font-bold">{unlockAtStr}</span>
+                          </div>
+                        </div>
+
+                        {/* Cooldown Psychology Tip */}
+                        <div className="max-w-sm bg-slate-900/75 border border-slate-700/70 rounded-xl px-4 py-2.5 mb-2.5">
+                          <div className="text-[9px] uppercase tracking-widest text-emerald-400 font-bold mb-1">
+                            Cooldown Reset Protocol
+                          </div>
+                          <p className="text-slate-300 text-xs leading-relaxed">
+                            {guidanceTip}
+                          </p>
+                        </div>
+
+                        <p className="text-[10px] text-slate-500 font-mono">
+                          Strict Enforcer: Auto-unlocks at 00:00 • Reset/Clear disabled during cooldown
+                        </p>
                       </div>
-                      <h3 className="text-2xl font-black text-rose-500 uppercase tracking-widest mb-2 drop-shadow-md">
-                        Risk Lock Active
-                      </h3>
-                      <p className="text-slate-300 max-w-md text-sm leading-relaxed">
-                        {runningBalance <=
-                        accumulatedStats.startingCapital *
-                          (1 - maxDailyLoss / 100) ? (
-                          <>
-                            You have hit your daily maximum loss limit of{" "}
-                            <span className="font-bold text-white bg-rose-500/20 px-1.5 py-0.5 rounded">
-                              {maxDailyLoss}%
-                            </span>
-                            .
-                          </>
-                        ) : (
-                          <>
-                            You have hit your maximum consecutive loss limit of{" "}
-                            <span className="font-bold text-white bg-rose-500/20 px-1.5 py-0.5 rounded">
-                              {maxConsecutiveLosses}
-                            </span>
-                            .
-                          </>
-                        )}
-                        <br />
-                        <br />
-                        Trading is locked to protect your capital from revenge
-                        trading. Take a break and come back tomorrow.
-                      </p>
-                    </div>
-                  )}
+                    );
+                  })()}
                   <table className="w-full text-sm text-left relative">
                     <thead className="text-xs text-slate-400 uppercase bg-slate-900/95 backdrop-blur-sm border-b border-slate-700 sticky top-0 z-20 shadow-sm">
                       <tr>
@@ -5225,6 +5698,7 @@ export default function App() {
                                               "Live Simulation Result",
                                               `Simulated ${maxTrades} trades with your ${assumedWinRate}% Win Rate.\n\nStatus: ${sim.status}\nFinal Balance: ${currency}${sim.finalBalance.toFixed(2)}\nTotal PnL: ${currency}${sim.netProfit.toFixed(2)}\n\nWould you like to apply this specific sequence to your active trade log?`,
                                               () => {
+                                                if (checkAntiShieldBlock("Applying simulation")) return;
                                                 const newTrades = [...tradesInput];
                                                 sim.trades.forEach((t, i) => {
                                                   if (newTrades[i]) {
@@ -6165,10 +6639,10 @@ export default function App() {
                           </button>
                           <div className="text-right">
                             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider flex items-center justify-center sm:justify-end gap-1">
-                              <ShieldCheck className="w-3 h-3 text-emerald-400" /> © 2026 ALADDIN TRADE MANAGER
+                              <ShieldCheck className="w-3 h-3 text-emerald-400" /> © 2027 ALADDIN TRADE MANAGER
                             </p>
                             <p className="text-[9px] text-slate-400 mt-0.5 text-center sm:text-right">
-                              All Rights Reserved © Aladdin AI Organization  - www.AladdinAI.org
+                              All Rights Reserved © Aladdin AI Organization  - AladdinAI.Org
                             </p>
                           </div>
                         </div>
@@ -6189,12 +6663,12 @@ export default function App() {
                   className="relative z-10 flex flex-col items-center gap-1.5 w-full overflow-x-auto"
                   style={{ scrollbarWidth: "none" }}
                 >
-                  <div className="border border-[#00d084]/80 bg-[#00d084]/10 text-[#00d084] px-3.5 py-0.5 rounded-md font-sans text-xs sm:text-sm md:text-base font-black tracking-[0.15em] sm:tracking-[0.2em] shadow-[0_0_10px_rgba(0,208,132,0.15)] whitespace-nowrap uppercase">
+                  <div className="border border-[#00d084]/80 bg-[#00d084]/10 text-[#00d084] px-2.5 py-0.5 rounded-md font-sans text-[10px] sm:text-xs font-extrabold tracking-[0.14em] sm:tracking-[0.18em] shadow-[0_0_10px_rgba(0,208,132,0.15)] whitespace-nowrap uppercase">
                     - ALADDIN AI ORGANIZATION -
                   </div>
 
                   <p className="text-slate-400 text-[8px] md:text-[10px] whitespace-nowrap">
-                    All Rights Reserved © Aladdin AI Organization  - <a href="https://www.AladdinAI.org" target="_blank" rel="noreferrer" className="text-emerald-400 hover:underline font-semibold">www.AladdinAI.org</a>
+                    All Rights Reserved © Aladdin AI Organization  - <a href="https://www.AladdinAI.org" target="_blank" rel="noreferrer" className="text-emerald-400 hover:underline font-semibold">AladdinAI.Org</a>
                   </p>
                 </div>
               </div>

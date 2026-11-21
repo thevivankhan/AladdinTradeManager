@@ -157,18 +157,6 @@ export interface TutorialClip {
 
 export const TUTORIAL_CLIPS: TutorialClip[] = [
   {
-    id: 'overview',
-    slotNumber: 0,
-    title: 'ATM™ Core Ecosystem & Smart Journal Overview',
-    duration: '0:33',
-    durationSeconds: 33,
-    tag: 'Core Demo',
-    tagColor: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/30',
-    videoUrl: '/assets/aistudio/VID-20261028-WA0005_101341a5.mp4',
-    isReady: true,
-    summary: 'Full platform walkthrough, risk management matrix, and live execution interface.',
-  },
-  {
     id: 'slot-1',
     slotNumber: 1,
     title: 'Chart AI Scanner & Neural Precision In Action',
@@ -344,7 +332,7 @@ const VideoShowcase: React.FC<{ aboutUsTitle: string }> = React.memo(({ aboutUsT
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [isShutterOpen, setIsShutterOpen] = useState<boolean>(false);
-  const [activeClipId, setActiveClipId] = useState<string>('overview');
+  const [activeClipId, setActiveClipId] = useState<string>(TUTORIAL_CLIPS[0].id);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [showControls, setShowControls] = useState<boolean>(false);
   const [isSeeking, setIsSeeking] = useState<boolean>(false);
