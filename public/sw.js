@@ -1,4 +1,4 @@
-const CACHE_NAME = 'aladdin-trade-v2';
+const CACHE_NAME = 'aladdin-trade-v4';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();

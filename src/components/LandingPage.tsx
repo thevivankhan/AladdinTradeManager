@@ -1290,7 +1290,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
       {/* Top Navbar */}
       <header className="relative z-30 max-w-xl mx-auto w-full px-4 pt-6 pb-2 flex items-center justify-center">
         {/* Centered Brand Title & Subtitle */}
-        <div className="text-center px-12">
+        <div className="text-center px-12 flex flex-col items-center">
+          <img
+            src="/aladdin-logo.png?v=4"
+            alt="Aladdin Trade Manager"
+            className="w-11 h-11 object-contain mb-1.5 drop-shadow-[0_0_14px_rgba(34,197,94,0.35)] select-none"
+          />
           <h1 className="text-base sm:text-lg font-black tracking-tight text-white uppercase leading-tight select-none">
             {t.appName}
           </h1>

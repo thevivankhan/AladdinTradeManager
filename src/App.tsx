@@ -2193,7 +2193,7 @@ export default function App() {
            .replace(/'/g, "&#039;");
     }
     const promoText = `\n\n🔗 Join Saify Khan Academy 🎓 Channel for more aggressively growth\nhttps://t.me/SaifyKhanAcademy${customLink ? `\n${customLink}` : ''}`;
-    const brandName = "🪙 ALADDIN TRADE MANAGER";
+    const brandName = "ALADDIN TRADE MANAGER";
     const username = customUsername;
 
     const bgColor = theme === 'light' ? '#f8fafc' : theme === 'blue' ? '#1e3a8a' : '#0f172a';
@@ -2226,7 +2226,10 @@ export default function App() {
 
       container.innerHTML = `
         <div style="text-align: center; margin-bottom: 20px;">
-          <h1 style="font-size: 24px; font-weight: 900; margin: 0; color: #fbbf24;">${brandName}</h1>
+          <div style="display: flex; align-items: center; justify-content: center; gap: 10px;">
+            <img src="/aladdin-logo.png?v=4" alt="Aladdin" style="width: 34px; height: 34px; object-fit: contain;" />
+            <h1 style="font-size: 22px; font-weight: 900; margin: 0; color: #4ade80;">${brandName}</h1>
+          </div>
           ${username ? `<p style="font-size: 16px; font-weight: 600; margin: 4px 0 0 0; color: #ffffff;">By ${escapeHtml(username)}</p>` : ''}
           <p style="color: ${mutedColor}; margin: 4px 0 0 0; font-size: 14px;">Session #${session.id} • ${formatDate(session.date)}</p>
         </div>
@@ -2297,7 +2300,10 @@ export default function App() {
 
       container.innerHTML = `
         <div style="text-align: center; margin-bottom: 20px;">
-          <h1 style="font-size: 24px; font-weight: 900; margin: 0; color: #fbbf24;">${brandName}</h1>
+          <div style="display: flex; align-items: center; justify-content: center; gap: 10px;">
+            <img src="/aladdin-logo.png?v=4" alt="Aladdin" style="width: 34px; height: 34px; object-fit: contain;" />
+            <h1 style="font-size: 22px; font-weight: 900; margin: 0; color: #4ade80;">${brandName}</h1>
+          </div>
           ${username ? `<p style="font-size: 16px; font-weight: 600; margin: 4px 0 0 0; color: #ffffff;">By ${escapeHtml(username)}</p>` : ''}
           <p style="color: ${mutedColor}; margin: 4px 0 0 0; font-size: 14px;">📊 Overall Portfolio Performance</p>
         </div>
@@ -2794,8 +2800,8 @@ export default function App() {
       {showInstallPopup && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[60] w-[90%] max-w-sm bg-slate-900/95 backdrop-blur-xl border border-emerald-500/30 p-4 rounded-2xl shadow-2xl shadow-emerald-900/20 animate-in slide-in-from-top-10 fade-in duration-500">
           <div className="flex items-start gap-4">
-            <div className="w-12 h-12 shrink-0 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/20">
-              <span className="text-2xl leading-none">🪙</span>
+            <div className="w-12 h-12 shrink-0 bg-[#05070e] border border-emerald-500/30 rounded-xl flex items-center justify-center p-1 shadow-lg shadow-emerald-500/20">
+              <img src="/aladdin-logo.png?v=4" alt="Aladdin Trade Manager" className="w-full h-full object-contain" />
             </div>
             <div className="flex-1">
               <h3 className="text-white font-bold text-lg leading-tight">
@@ -2837,8 +2843,8 @@ export default function App() {
         {!isAuthReady && !dbUser ? (
           <div className="min-h-screen bg-[#05070e] flex flex-col items-center justify-center text-white select-none">
             <div className="relative flex items-center justify-center">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-500/20 via-emerald-500/20 to-teal-500/20 border border-emerald-500/40 flex items-center justify-center text-3xl shadow-[0_0_30px_rgba(16,185,129,0.3)] animate-pulse">
-                🪙
+              <div className="w-20 h-20 flex items-center justify-center animate-pulse">
+                <img src="/aladdin-logo.png?v=4" alt="Aladdin Trade Manager" className="w-20 h-20 object-contain drop-shadow-[0_0_24px_rgba(34,197,94,0.4)]" />
               </div>
             </div>
             <div className="mt-4 text-xs font-mono font-bold tracking-widest text-emerald-400 uppercase">
@@ -2926,8 +2932,8 @@ export default function App() {
                 {/* HEADER */}
                 <header className="max-w-7xl mx-auto mb-6 flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-900 p-4 rounded-xl border border-slate-800 shadow-xl">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-lg flex items-center justify-center shadow-lg shadow-emerald-500/20">
-                      <span className="text-2xl leading-none">🪙</span>
+                    <div className="w-11 h-11 shrink-0 flex items-center justify-center">
+                      <img src="/aladdin-logo.png?v=4" alt="Aladdin Trade Manager" className="w-11 h-11 object-contain drop-shadow-[0_0_12px_rgba(34,197,94,0.35)]" />
                     </div>
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
@@ -6102,8 +6108,8 @@ export default function App() {
                         <div className="absolute bottom-0 left-0 -mb-4 -ml-4 w-24 h-24 bg-emerald-500/10 rounded-full blur-2xl"></div>
 
                         <div className="mb-5 relative z-10">
-                          <div className="inline-flex items-center justify-center p-2 bg-slate-800/80 rounded-xl border border-slate-700/50 mb-3 shadow-inner">
-                            <span className="text-2xl leading-none">🪙</span>
+                          <div className="inline-flex items-center justify-center mb-3">
+                            <img src="/aladdin-logo.png?v=4" alt="Aladdin Trade Manager" className="w-14 h-14 object-contain drop-shadow-[0_0_16px_rgba(34,197,94,0.3)]" />
                           </div>
                           <h3 className="text-lg font-black tracking-wide">
                             <span className="text-green-400">ALADDIN</span> <span className="text-white">TRADE MANAGER</span>
@@ -6138,7 +6144,7 @@ export default function App() {
 
                           <div className="mt-4 flex flex-col items-center gap-2.5">
                             <a
-                              href="https://www.cocabellie.com"
+                              href="https://www.AladdinAI.org"
                               target="_blank"
                               rel="noopener noreferrer"
                               className="inline-flex items-center gap-2 text-xs font-black tracking-wider uppercase text-white bg-gradient-to-r from-red-600 via-rose-600 to-red-700 hover:from-red-500 hover:to-rose-500 border border-rose-400/40 px-6 py-2.5 rounded-xl transition-all shadow-[0_0_20px_rgba(225,29,72,0.45)] hover:shadow-[0_0_28px_rgba(225,29,72,0.7)] hover:-translate-y-0.5 cursor-pointer active:scale-95"
@@ -6162,7 +6168,7 @@ export default function App() {
                               <ShieldCheck className="w-3 h-3 text-emerald-400" /> © 2026 ALADDIN TRADE MANAGER
                             </p>
                             <p className="text-[9px] text-slate-400 mt-0.5 text-center sm:text-right">
-                              All Rights Reserved © Aladdin AI Organization  - www.Aladdin.Org.In
+                              All Rights Reserved © Aladdin AI Organization  - www.AladdinAI.org
                             </p>
                           </div>
                         </div>
@@ -6188,7 +6194,7 @@ export default function App() {
                   </div>
 
                   <p className="text-slate-400 text-[8px] md:text-[10px] whitespace-nowrap">
-                    All Rights Reserved © Aladdin AI Organization  - <a href="https://www.Aladdin.Org.In" target="_blank" rel="noreferrer" className="text-emerald-400 hover:underline font-semibold">www.Aladdin.Org.In</a>
+                    All Rights Reserved © Aladdin AI Organization  - <a href="https://www.AladdinAI.org" target="_blank" rel="noreferrer" className="text-emerald-400 hover:underline font-semibold">www.AladdinAI.org</a>
                   </p>
                 </div>
               </div>

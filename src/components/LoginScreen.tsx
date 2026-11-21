@@ -274,8 +274,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
         <div className="w-full bg-[#0b101d]/95 rounded-[23px] p-5 sm:p-7 backdrop-blur-2xl overflow-y-auto max-h-[92vh]">
           {/* Brand Header */}
           <div className="text-center mb-5">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500/25 via-cyan-500/20 to-purple-500/25 border border-amber-400/40 flex items-center justify-center mx-auto mb-2.5 shadow-[0_0_20px_rgba(245,158,11,0.2)]">
-              <span className="text-2xl">🪙</span>
+            <div className="w-14 h-14 flex items-center justify-center mx-auto mb-2.5">
+              <img src="/aladdin-logo.png?v=4" alt="Aladdin Trade Manager" className="w-14 h-14 object-contain drop-shadow-[0_0_16px_rgba(34,197,94,0.35)]" />
             </div>
             <h1 className="text-base sm:text-lg font-black bg-gradient-to-r from-white via-slate-100 to-slate-300 bg-clip-text text-transparent tracking-tight">
               Aladdin Trade Manager
