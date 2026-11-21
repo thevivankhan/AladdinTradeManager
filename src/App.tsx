@@ -654,7 +654,7 @@ export default function App() {
 
   // --- SMART ANTI-SHIELD (ESCALATING COOLDOWN ENGINE) ---
   const SMART_SHIELD_STORAGE_KEY = "aladdin_smart_shield_v1";
-  const DRAWDOWN_LOCK_MS = 6 * 60 * 60 * 1000; // 6 Hours for Max Daily Loss %
+  const DRAWDOWN_LOCK_MS = 3 * 60 * 60 * 1000; // 3 Hours for Max Daily Loss %
   const SHIELD_STAGES = [
     {
       stage: 1,
@@ -2933,7 +2933,7 @@ export default function App() {
         playShieldSound("unlock");
         showToast(
           wasDrawdownLock
-            ? "🛡️ 6h Daily Loss Shield Unlocked! Fresh Stage 1 (3 Losses) active."
+            ? "🛡️ 3h Daily Loss Shield Unlocked! Fresh Stage 1 (3 Losses) active."
             : `🛡️ Smart Shield Unlocked! Stage ${upcomingStageCfg.stage}/4 active (${upcomingStageCfg.lossesRequired}L → ${upcomingStageCfg.shortLabel}${upcomingStageCfg.stage === 4 ? " ↻" : ""}) — Trade with discipline.`,
           "success",
         );
@@ -2963,7 +2963,7 @@ export default function App() {
     };
   }, [shieldState.lockUntil, shieldState.stage, shieldState.activeLockStage, shieldState.lockReason, lastFilledTradeIndex]);
 
-  // Automatic Smart Anti-Shield Trigger (Drawdown 6h + Escalating Consecutive Loss 15m -> 30m -> 1h -> 3h Repeatable)
+  // Automatic Smart Anti-Shield Trigger (Drawdown 3h + Escalating Consecutive Loss 15m -> 30m -> 1h -> 3h Repeatable)
   useEffect(() => {
     const nowTs = Date.now();
     if (shieldState.lockUntil && nowTs < shieldState.lockUntil) return;
@@ -2989,7 +2989,7 @@ export default function App() {
       }));
       playShieldSound("lock");
       showToast(
-        `🛡️ Max Daily Loss (${maxDailyLoss}%) Hit! 6-Hour Anti-Shield Engaged to protect your capital.`,
+        `🛡️ Max Daily Loss (${maxDailyLoss}%) Hit! 3-Hour Anti-Shield Engaged to protect your capital.`,
         "error",
       );
       return;
@@ -3690,7 +3690,7 @@ export default function App() {
                                 onClick={() => {
                                   confirmAction(
                                     "How Smart Anti-Shield Works",
-                                    "1. Stage 1: 3 consecutive losses → 15m auto-lock.\n2. Stage 2: 3 consecutive losses → 30m auto-lock (box auto-switches to 2 after unlock).\n3. Stage 3: 2 consecutive losses → 1h auto-lock.\n4. Stage 4: 2 consecutive losses → 3h auto-lock (Repeatable in same session).\n5. Max Daily Loss % hit → 6h protective lock.\n6. Anti-Cheat: Refresh, Reset, and Clear cannot bypass active timers. Unlocks automatically at 00:00.",
+                                    "1. Stage 1: 3 consecutive losses → 15m auto-lock.\n2. Stage 2: 3 consecutive losses → 30m auto-lock (box auto-switches to 2 after unlock).\n3. Stage 3: 2 consecutive losses → 1h auto-lock.\n4. Stage 4: 2 consecutive losses → 3h auto-lock (Repeatable in same session).\n5. Max Daily Loss % hit → 3h protective lock.\n6. Anti-Cheat: Refresh, Reset, and Clear cannot bypass active timers. Unlocks automatically at 00:00.",
                                     () => {},
                                   );
                                 }}
@@ -3728,7 +3728,7 @@ export default function App() {
                                   {isLocked && (
                                     <span className="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[9px] font-mono">
                                       {shieldState.lockReason === "DRAWDOWN"
-                                        ? "DAILY LOSS 6h"
+                                        ? "DAILY LOSS 3h"
                                         : `STAGE ${shieldState.activeLockStage}/4`}
                                     </span>
                                   )}
@@ -3869,7 +3869,7 @@ export default function App() {
                                   Max Daily Loss %
                                 </label>
                                 <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-300 border border-rose-500/30">
-                                  6h Lock
+                                  3h Lock
                                 </span>
                               </div>
                               <div className="flex items-center gap-3">
@@ -4714,7 +4714,7 @@ export default function App() {
                       : "";
                     const guidanceTip =
                       shieldState.lockReason === "DRAWDOWN"
-                        ? "You reached your Max Daily Loss limit. Step away for 6 hours to protect your capital and return with a fresh mindset."
+                        ? "You reached your Max Daily Loss limit. Step away for 3 hours to protect your capital and return with a fresh mindset."
                         : activeStageObj.tip;
 
                     return (
@@ -4726,7 +4726,7 @@ export default function App() {
                         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-500/15 border border-rose-500/35 text-[10px] font-black uppercase tracking-widest text-rose-300 mb-2">
                           <Lock className="w-3 h-3" />
                           {shieldState.lockReason === "DRAWDOWN"
-                            ? `Daily Loss Shield (${maxDailyLoss}%) • 6h Cooldown`
+                            ? `Daily Loss Shield (${maxDailyLoss}%) • 3h Cooldown`
                             : `Smart Shield Stage ${shieldState.activeLockStage}/4 • ${activeStageObj.label} Cooldown`}
                         </div>
 
