@@ -874,6 +874,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
   const [showBlogModal, setShowBlogModal] = useState(false);
   const [showSupportModal, setShowSupportModal] = useState(false);
   const [showSupportFormModal, setShowSupportFormModal] = useState(false);
+  const [showLegalShutter, setShowLegalShutter] = useState(false);
+  const [showLegalModal, setShowLegalModal] = useState(false);
 
   // Hero Card Modes
   const [activeTab, setActiveTab] = useState<TabMode>('code');
@@ -1326,6 +1328,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
                 className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-medium text-slate-200 hover:bg-slate-800/80 hover:text-cyan-400 transition-colors text-left cursor-pointer"
               >
                 <MessageCircle className="w-4 h-4 text-emerald-400" /> Support
+              </button>
+
+              <button
+                onClick={() => {
+                  setShowLegalModal(true);
+                  setIsMenuOpen(false);
+                }}
+                className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-medium text-slate-200 hover:bg-slate-800/80 hover:text-cyan-400 transition-colors text-left cursor-pointer"
+              >
+                <ShieldCheck className="w-4 h-4 text-amber-400" /> Legal & Risk Notice
               </button>
 
               <div className="h-px bg-slate-800 my-1.5" />
@@ -2276,11 +2288,207 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
           </button>
         </div>
 
-        {/* Quiet Copyright notice */}
-        <p className="text-center text-[10px] text-slate-600 mt-6 font-mono">
-          © {new Date().getFullYear()} Aladdin AI Organization · www.Aladdin.Org.In
-        </p>
+        {/* Minimal Footer + Quiet Collapsible Legal Shutter */}
+        <div className="max-w-3xl mx-auto px-4 mt-6">
+          {/* Smooth Shutter Panel — Hidden by default, opens on click */}
+          {showLegalShutter && (
+            <div className="mb-4 rounded-2xl bg-[#070d1b]/90 border border-slate-800/80 backdrop-blur-md p-4 sm:p-5 shadow-[0_12px_40px_rgba(0,0,0,0.45)] text-left animate-in fade-in slide-in-from-bottom-2 duration-200">
+              {/* Header Bar */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-3 mb-3.5 border-b border-slate-800/80">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-200">
+                    Risk Disclosure · FTC & Legal Notice
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/25 text-amber-300">
+                    Educational Purpose Only
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowLegalShutter(false)}
+                    className="p-1 rounded-lg text-slate-500 hover:text-slate-200 hover:bg-slate-800/80 transition-colors cursor-pointer"
+                    aria-label="Close legal disclosure"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Structured Compliance Sections */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px] leading-relaxed text-slate-400">
+                <div className="rounded-xl bg-slate-900/50 border border-slate-800/60 p-3.5">
+                  <h4 className="text-[10px] font-bold uppercase tracking-wider text-rose-400 mb-1.5 flex items-center gap-1.5">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    High-Risk Trading Warning
+                  </h4>
+                  <p>
+                    Trading financial instruments—including Binary Options, Forex, Cryptocurrencies, and CFDs—carries a high level of risk and may result in the partial or total loss of your invested capital. Never trade with funds you cannot afford to lose. Past performance, backtests, or simulations never guarantee future results.
+                  </p>
+                </div>
+
+                <div className="rounded-xl bg-slate-900/50 border border-slate-800/60 p-3.5">
+                  <h4 className="text-[10px] font-bold uppercase tracking-wider text-amber-400 mb-1.5 flex items-center gap-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+                    FTC Compliance & Earnings Disclaimer
+                  </h4>
+                  <p>
+                    In full compliance with FTC guidelines, no guarantees, promises, or projections of profit, win rate, or income are made. All calculators, metrics, and demonstrations are purely illustrative. Individual results depend strictly on market volatility, broker execution, user skill, and personal discipline.
+                  </p>
+                </div>
+
+                <div className="rounded-xl bg-slate-900/50 border border-slate-800/60 p-3.5">
+                  <h4 className="text-[10px] font-bold uppercase tracking-wider text-cyan-400 mb-1.5 flex items-center gap-1.5">
+                    <BookOpen className="w-3.5 h-3.5 shrink-0" />
+                    Educational Use & Zero Liability
+                  </h4>
+                  <p>
+                    <strong className="text-slate-200">Aladdin Trade Manager</strong> and <strong className="text-slate-200">Aladdin AI Organization</strong> are strictly educational and risk-discipline software tools—not financial, investment, or legal advisors. <strong className="text-slate-200">100% of all trading decisions, profits, and losses are solely the user&apos;s responsibility.</strong> Neither the app, Aladdin Trade Manager, nor Aladdin AI Organization holds any liability whatsoever for any loss or damage.
+                  </p>
+                </div>
+
+                <div className="rounded-xl bg-slate-900/50 border border-slate-800/60 p-3.5">
+                  <h4 className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 mb-1.5 flex items-center gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                    Strict No-Refund & Final Sale Policy
+                  </h4>
+                  <p>
+                    By accessing, activating, or using this software, you acknowledge full acceptance of these terms and legal disclaimers. Due to instant digital license provisioning and immediate software access, <strong className="text-slate-200">all sales, activations, and subscriptions are final and strictly non-refundable</strong> under all circumstances.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Minimal Always-Visible Copyright & Subtle Shutter Trigger */}
+          <div className="flex flex-col items-center justify-center gap-1 text-center">
+            <p className="text-[11px] text-slate-400 font-medium tracking-wide">
+              © 2027 Aladdin AI Organization{' '}
+              <a
+                href="https://www.AladdinAI.org"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-emerald-400 hover:text-emerald-300 hover:underline font-semibold ml-1 transition-colors"
+              >
+                AladdinAI.Org
+              </a>
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowLegalShutter((prev) => !prev)}
+              className="inline-flex items-center gap-1 text-[10px] font-mono text-slate-500 hover:text-slate-300 uppercase tracking-widest transition-colors cursor-pointer py-0.5"
+              aria-expanded={showLegalShutter}
+            >
+              <span>All Rights Reserved · Educational Software</span>
+              {showLegalShutter ? (
+                <ChevronDown className="w-3 h-3 text-slate-400" />
+              ) : (
+                <ChevronUp className="w-3 h-3 text-slate-500" />
+              )}
+            </button>
+          </div>
+        </div>
       </footer>
+
+      {/* ============================================================== */}
+      {/* MODAL: LEGAL & RISK DISCLOSURE (FROM TOP-RIGHT MENU)           */}
+      {/* ============================================================== */}
+      {showLegalModal && (
+        <div
+          onClick={() => setShowLegalModal(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-2xl max-h-[85vh] overflow-y-auto bg-[#070d1b] border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-2xl text-left"
+          >
+            {/* Modal Header */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-3.5 mb-4 border-b border-slate-800/80">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                <span className="text-xs font-black uppercase tracking-[0.15em] text-slate-100">
+                  Risk Disclosure · FTC & Legal Notice
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/25 text-amber-300">
+                  Educational Purpose Only
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowLegalModal(false)}
+                  className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                  aria-label="Close"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Structured Compliance Sections */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 text-[11px] leading-relaxed text-slate-400">
+              <div className="rounded-xl bg-slate-900/60 border border-slate-800/70 p-3.5">
+                <h4 className="text-[10px] font-bold uppercase tracking-wider text-rose-400 mb-1.5 flex items-center gap-1.5">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                  High-Risk Trading Warning
+                </h4>
+                <p>
+                  Trading financial instruments—including Binary Options, Forex, Cryptocurrencies, and CFDs—carries a high level of risk and may result in the partial or total loss of your invested capital. Never trade with funds you cannot afford to lose. Past performance, backtests, or simulations never guarantee future results.
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-slate-900/60 border border-slate-800/70 p-3.5">
+                <h4 className="text-[10px] font-bold uppercase tracking-wider text-amber-400 mb-1.5 flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+                  FTC Compliance & Earnings Disclaimer
+                </h4>
+                <p>
+                  In full compliance with FTC guidelines, no guarantees, promises, or projections of profit, win rate, or income are made. All calculators, metrics, and demonstrations are purely illustrative. Individual results depend strictly on market volatility, broker execution, user skill, and personal discipline.
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-slate-900/60 border border-slate-800/70 p-3.5">
+                <h4 className="text-[10px] font-bold uppercase tracking-wider text-cyan-400 mb-1.5 flex items-center gap-1.5">
+                  <BookOpen className="w-3.5 h-3.5 shrink-0" />
+                  Educational Use & Zero Liability
+                </h4>
+                <p>
+                  <strong className="text-slate-200">Aladdin Trade Manager</strong> and <strong className="text-slate-200">Aladdin AI Organization</strong> are strictly educational and risk-discipline software tools—not financial, investment, or legal advisors. <strong className="text-slate-200">100% of all trading decisions, profits, and losses are solely the user&apos;s responsibility.</strong> Neither the app, Aladdin Trade Manager, nor Aladdin AI Organization holds any liability whatsoever for any loss or damage.
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-slate-900/60 border border-slate-800/70 p-3.5">
+                <h4 className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 mb-1.5 flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                  Strict No-Refund & Final Sale Policy
+                </h4>
+                <p>
+                  By accessing, activating, or using this software, you acknowledge full acceptance of these terms and legal disclaimers. Due to instant digital license provisioning and immediate software access, <strong className="text-slate-200">all sales, activations, and subscriptions are final and strictly non-refundable</strong> under all circumstances.
+                </p>
+              </div>
+            </div>
+
+            {/* Modal Footer Copyright */}
+            <div className="mt-5 pt-4 border-t border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-2 text-center sm:text-left">
+              <p className="text-[11px] text-slate-300 font-semibold tracking-wide">
+                © 2027 Aladdin AI Organization{' '}
+                <a
+                  href="https://www.AladdinAI.org"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-emerald-400 hover:text-emerald-300 hover:underline font-bold ml-1 transition-colors"
+                >
+                  AladdinAI.Org
+                </a>
+              </p>
+              <span className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">
+                All Rights Reserved · Educational Software
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ============================================================== */}
       {/* MODAL: LANGUAGE SELECTOR                                       */}
