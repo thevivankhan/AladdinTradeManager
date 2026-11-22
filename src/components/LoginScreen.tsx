@@ -1224,9 +1224,20 @@ _“Dear Admin and Aladdin AI Support Desk, my candidate application has been su
       </div>
 
       {/* Subtle Copyright */}
-      <div className="mt-5 pb-6 text-center relative z-10">
-        <p className="text-slate-500 text-[10px] tracking-wide">
-          © Aladdin AI Organization · www.aladdin.org.in
+      <div className="mt-5 pb-6 text-center relative z-10 flex flex-col items-center gap-1">
+        <p className="text-slate-400 text-[11px] font-medium tracking-wide">
+          © 2027 Aladdin AI Organization{' '}
+          <a
+            href="https://www.AladdinAI.org"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-emerald-400 hover:text-emerald-300 hover:underline font-semibold ml-1 transition-colors"
+          >
+            AladdinAI.Org
+          </a>
+        </p>
+        <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">
+          All Rights Reserved · Educational Trading Software
         </p>
       </div>
 
