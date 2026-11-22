@@ -630,7 +630,7 @@ export default function App() {
       trades: 0,
       wins: 0,
       losses: 0,
-      startingCapital: 100.0, // The very first capital of Day 1
+      startingCapital: 350.0, // The very first capital of Day 1
     },
   );
 
@@ -641,13 +641,13 @@ export default function App() {
 
   // Current Session Settings
   const [initialCapital, setInitialCapital] = useState<number>(
-    savedState?.initialCapital ?? 100.0,
+    savedState?.initialCapital ?? 350.0,
   ); // Capital at start of current session
   const [payout, setPayout] = useState<number>(savedState?.payout ?? 92);
   const [currency, setCurrency] = useState<string>(savedState?.currency ?? "$");
   const [maxDailyLoss, setMaxDailyLoss] = useState<number>(
-    savedState?.maxDailyLoss ?? 10,
-  ); // Default 10% max daily loss
+    savedState?.maxDailyLoss ?? 30,
+  ); // Default 30% max daily loss
   const [maxConsecutiveLosses, setMaxConsecutiveLosses] = useState<number>(
     savedState?.maxConsecutiveLosses ?? 3,
   ); // Kept for state compatibility; Smart Anti-Shield strictly enforces 3 -> 3 -> 2 -> 2 (Repeatable)
@@ -800,19 +800,19 @@ export default function App() {
     | "JOURNAL"
     | "CHART_SCANNER"
   >("NONE");
-  const [plannerStartCapital, setPlannerStartCapital] = useState<number>(100);
+  const [plannerStartCapital, setPlannerStartCapital] = useState<number>(350);
   const [plannerDailyTarget, setPlannerDailyTarget] = useState<number>(5);
   const [simSequence, setSimSequence] = useState<string>("");
 
-  // Trade Log Rows Setting
+  // Trade Log Rows Setting (Default 10, user can manually edit 1-100)
   const [maxTrades, setMaxTrades] = useState<number>(
-    savedState?.maxTrades ?? 20,
+    savedState?.maxTrades ?? 10,
   );
 
   // Trades Input State
   const [tradesInput, setTradesInput] = useState<TradeState[]>(
     savedState?.tradesInput ??
-      Array.from({ length: 100 }, (_, i) => ({
+      Array.from({ length: 10 }, (_, i) => ({
         id: i + 1,
         result: "-",
         customAmount: "",
@@ -847,7 +847,7 @@ export default function App() {
 
   // Session Target Settings
   const [stopLossPercent, setStopLossPercent] = useState<number>(
-    savedState?.stopLossPercent ?? 20,
+    savedState?.stopLossPercent ?? 30,
   );
   const [maxLossLimit, setMaxLossLimit] = useState<number>(
     savedState?.maxLossLimit ?? 8,
@@ -872,15 +872,15 @@ export default function App() {
     savedState?.macroGoalFormat ?? "%",
   );
   const [stopLossAlertPct, setStopLossAlertPct] = useState<number>(
-    savedState?.stopLossAlertPct ?? 20,
+    savedState?.stopLossAlertPct ?? 30,
   );
 
   // Strategy Settings
   const [strategyMode, setStrategyMode] = useState<"TARGET" | "CAPITAL" | "COMPOUND">(
-    savedState?.strategyMode ?? "TARGET",
+    savedState?.strategyMode ?? "CAPITAL",
   );
   const [capTotalSteps, setCapTotalSteps] = useState<number>(
-    savedState?.capTotalSteps ?? 10,
+    savedState?.capTotalSteps ?? 8,
   );
   const [capRecoveryWins, setCapRecoveryWins] = useState<number>(
     savedState?.capRecoveryWins ?? 1,
@@ -2146,17 +2146,17 @@ export default function App() {
       console.error("Failed to save restored state to localStorage", e);
     }
 
-    setInitialCapital(parsed.initialCapital ?? 100);
+    setInitialCapital(parsed.initialCapital ?? 350);
     setCurrency(parsed.currency ?? "$");
-    setStrategyMode(parsed.strategyMode ?? "TARGET");
+    setStrategyMode(parsed.strategyMode ?? "CAPITAL");
     setProfitTarget(parsed.profitTarget ?? 10);
     setDailyGoalFormat(parsed.dailyGoalFormat ?? "%");
     setMacroGoalTarget(parsed.macroGoalTarget ?? 100);
     setMacroGoalFormat(parsed.macroGoalFormat ?? "%");
-    setStopLossPercent(parsed.stopLossPercent ?? 10);
+    setStopLossPercent(parsed.stopLossPercent ?? 30);
     setMaxLossLimit(parsed.maxLossLimit ?? 0);
     setMaxTrades(parsed.maxTrades ?? 10);
-    setCapTotalSteps(parsed.capTotalSteps ?? 5);
+    setCapTotalSteps(parsed.capTotalSteps ?? 8);
     setCapRecoveryWins(parsed.capRecoveryWins ?? 1);
     setAutomatedWins(parsed.automatedWins ?? 2);
     setOptions(parsed.options ?? options);
@@ -2170,9 +2170,10 @@ export default function App() {
     );
     setPastSessions(parsed.pastSessions ?? []);
     setAccumulatedStats(
-      parsed.accumulatedStats ?? { trades: 0, wins: 0, losses: 0, profit: 0 },
+      parsed.accumulatedStats ?? { trades: 0, wins: 0, losses: 0, startingCapital: 350 },
     );
-    setStopLossAlertPct(parsed.stopLossAlertPct ?? 20);
+    setStopLossAlertPct(parsed.stopLossAlertPct ?? 30);
+    setMaxDailyLoss(parsed.maxDailyLoss ?? 30);
 
     // Give React time to render and run the save effect before allowing new saves
     setTimeout(() => {
@@ -6513,7 +6514,7 @@ export default function App() {
                           }}
                           onBlur={(e) => {
                             let val = parseFloat(e.target.value);
-                            if (isNaN(val) || val < 1) setStopLossAlertPct(20);
+                            if (isNaN(val) || val < 1) setStopLossAlertPct(30);
                           }}
                           className="bg-slate-900 border border-slate-600 rounded px-2 py-1 text-center text-sm text-white w-16 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none transition-all"
                         />
